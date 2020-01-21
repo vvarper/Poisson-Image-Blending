@@ -109,10 +109,10 @@ def cargaConjuntoImagenes():
         x, mascara = cv2.threshold(mascara, 0, 255, cv2.THRESH_OTSU)
         mascaras.append(mascara)
 
-    for img in sorted(listdir("imagenes/source")):
+    for img in sorted(listdir("imagenes/sources")):
         fuentes.append(cargarImagen("imagenes/source/" + img, 1))
 
-    for img in sorted(listdir("imagenes/target")):
+    for img in sorted(listdir("imagenes/targets")):
         destinos.append(cargarImagen("imagenes/target/" + img, 1))
 
     return fuentes, mascaras, destinos
