@@ -27,11 +27,13 @@ def normalizar(im):
     maximo = np.amax(im, axis=(0, 1))
     minimo = np.amin(im, axis=(0, 1))
 
-    # if (maximo != minimo).any():
-    #     # Usar estos valores para normalizar la imagen entre 0 y 255
-    #     imagen_normalizada = np.uint8(255*((im-minimo)/(maximo-minimo)))
-    # else:
-    imagen_normalizada = np.uint8(im)
+    if (maximo != minimo).any():
+        # Usar estos valores para normalizar la imagen entre 0 y 255
+        imagen_normalizada = np.uint8(255*((im-minimo)/(maximo-minimo)))
+    else:
+        imagen_normalizada = np.uint8(im)
+
+    #imagen_normalizada = np.array(im * 255, dtype=np.uint8)
 
     return imagen_normalizada
 
@@ -110,7 +112,7 @@ def getPosicionesMascara(mascara):
 
 
 def getVecindario(pos):
-    i,j = pos
+    i, j = pos
 
     vecindario = [(i+1, j), (i-1, j), (i, j+1), (i, j-1)]
     return vecindario
@@ -132,21 +134,25 @@ def matriz_poisson(omega):
 
     return A
 
-def esBorde(mascara, omega, posicion):
+
+def esBorde(omega, posicion):
     if posicion in omega:
         for vecino in getVecindario(posicion):
             if vecino not in omega:
-                return True 
-    
+                return True
+
     return False
 
 
 def calcularValorBorde(omega, mascara, posicion, destino):
     valorBorde = 0
-    if (esBorde(mascara, omega, posicion)):
+    if (esBorde(omega, posicion)):
         for vecino in getVecindario(posicion):
             if not vecino in omega:
-                valorBorde += destino[vecino]
+                if dentroImagen(destino, vecino):
+                    valorBorde += destino[vecino]
+                else:
+                    valorBorde += destino[posicion]
 
     return valorBorde
 
@@ -170,22 +176,22 @@ def getLaplaciana(fuente, posicion):
 
 def calcularDivGuia(omega, mascara, fuente, destino):
     b = np.zeros(len(omega))
-    for i, posicion in enumerate(omega):
-        b[i] = getLaplaciana(fuente, posicion) + \
-            calcularValorBorde(omega, mascara, posicion, destino)
+    for i in range(len(omega)):
+        b[i] = getLaplaciana(fuente, omega[i]) + \
+            calcularValorBorde(omega, mascara, omega[i], destino)
 
     return b
 
 
-def getLaplacianaMix(fuente, destino, posicion, canal):
+def getLaplacianaMix(fuente, destino, posicion):
     laplaciana = 0
     for vecino in getVecindario(posicion):
         if dentroImagen(fuente, vecino):
-            i,j = posicion
-            i_vecino, j_vecino = vecino
-            grad_fuente = fuente[i,j,canal] - fuente[i_vecino, j_vecino, canal]
-            grad_destino = destino[i,j,canal] - destino[i_vecino, j_vecino, canal]
-            if grad_fuente > grad_destino:
+            # i,j = posicion
+            # i_vecino, j_vecino = vecino
+            grad_fuente = fuente[posicion] - fuente[vecino]
+            grad_destino = destino[posicion] - destino[vecino]
+            if abs(grad_fuente) > abs(grad_destino):
                 laplaciana += grad_fuente
             else:
                 laplaciana += grad_destino
@@ -193,12 +199,12 @@ def getLaplacianaMix(fuente, destino, posicion, canal):
     return laplaciana
 
 
-def calcularDivGuiaMix(omega, mascara, fuente, destino, canal):
+def calcularDivGuiaMix(omega, mascara, fuente, destino):
     b = np.zeros(len(omega))
 
     for i in range(len(omega)):
-        b[i] = getLaplacianaMix(fuente, destino, omega[i], canal) #+ \
-            #calcularValorBorde(omega, mascara, omega[i], destino)
+        b[i] = getLaplacianaMix(fuente, destino, omega[i]) + \
+            calcularValorBorde(omega, mascara, omega[i], destino)
 
     return b
 
@@ -214,41 +220,44 @@ def poisson_blending(mascara, fuente, destino, mixingGradients):
     # y f(borde) = destino(borde), donde borde es el borde de la máscara (está dentro)
     # f fuera de la máscara tendrá los valores de destino
 
+    print(destino.shape)
+
     # Lista con coordenadas píxeles máscara
     omega = getPosicionesMascara(mascara)
+
     print("Calculando A")
     A = matriz_poisson(omega)
 
     u = []
 
-    for i in range(3):
+    for canal in range(3):
         print("Calculando b")
         # Calcular b en canal
         if (mixingGradients):
-            b = calcularDivGuiaMix(omega, mascara, fuente, destino, i)
+            b = calcularDivGuiaMix(
+                omega, mascara, fuente[:, :, canal], destino[:, :, canal])
         else:
-            b = calcularDivGuia(omega, mascara, fuente)
+            b = calcularDivGuia(
+                omega, mascara, fuente[:, :, canal], destino[:, :, canal])
 
         print("Calculando u")
         # Resolver Au=b en canal y guardar u
         u_canal, x = linalg.cg(A, b)
         u.append(u_canal)
+        # print(np.max(b))
+        # print(np.min(b))
+        # print(np.max(u_canal))
+        # print(np.min(u_canal))
 
     solucion = np.copy(destino)
 
-    print(np.max(u[0]))
-    print(np.min(u[0]))
     print("Calculando solución final")
     for i, posicion in enumerate(omega):
         for canal in range(3):
             pos_y, pos_x = posicion
-            # print(solucion)
-            # print(u)
             solucion[pos_y, pos_x, canal] = u[canal][i]
-        if i % 50 == 0:
-            mostrarImagen(solucion)
 
-    return solucion
+    return np.clip(solucion, 0, 1)
 
     ############################################################################
     # Resolver Au = b
@@ -280,15 +289,45 @@ def poisson_blending(mascara, fuente, destino, mixingGradients):
     # 4. Construir f como la imagen destino con los valores de x dentro de la máscara
 
 
+def aplicarDesplazamiento(fuente, mascara, despl):
+    resultado = np.zeros(fuente.shape)
+    mask_resultado = np.zeros(mascara.shape)
+
+    for i in range(fuente.shape[0]):
+        for j in range(fuente.shape[1]):
+            if i+despl[0] >= 0 and i+despl[0] < fuente.shape[0] and \
+                    j+despl[1] >= 0 and j+despl[1] < fuente.shape[1]:
+                resultado[i+despl[0], j+despl[1]] = fuente[i, j]
+                mask_resultado[i+despl[0], j+despl[1]] = mascara[i, j]
+
+    return resultado, mask_resultado
+
+
+def superponer(mascara, fuente, destino):
+    posiciones = getPosicionesMascara(mascara)
+    resultado = np.copy(destino)
+
+    for pos in posiciones:
+        resultado[pos] = fuente[pos]
+
+    return resultado
+
 
 def main():
     mascara = cargarImagen('imagenes/mask.jpg', 0)
     mascara = np.array(mascara, dtype=np.uint8)
     x, mascara = cv2.threshold(mascara, 0, 255, cv2.THRESH_OTSU)
-    fuente = cargarImagen('imagenes/source.jpg', 1)
-    destino = cargarImagen('imagenes/target.jpg', 1)
+    fuente = cargarImagen('imagenes/luna.jpg', 1)
+    destino = cargarImagen('imagenes/playa.jpg', 1)
 
-    resultado = poisson_blending(mascara/255.0, fuente/255.0, destino/255.0, True)
+    despl = (20, 0)
+    #fuente, mascara = aplicarDesplazamiento(fuente, mascara, despl)
+    mostrarImagen(mascara)
+    resultado = poisson_blending(
+        mascara/255.0, fuente/255.0, destino/255.0, True)
+    # print(np.max(resultado))
+    # print(np.min(resultado))
     mostrarImagen(resultado)
+
 
 main()
