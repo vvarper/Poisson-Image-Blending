@@ -10,9 +10,10 @@ import numpy as np
 import cv2
 from scipy import sparse
 from scipy.sparse import linalg
+from os import listdir
+from os.path import isfile, join
 
 # Función para cargar una imagen con valores de tipo float
-
 
 def cargarImagen(filename, flagColor):
     imagen = cv2.imread(filename, flagColor)
@@ -20,7 +21,6 @@ def cargarImagen(filename, flagColor):
     return imagen.astype(float)
 
 # Función para normalizar una imagen 0-255, uint8
-
 
 def normalizar(im):
     # Buscar máximo y mínimo en cada canal (si está en grises, hay un solo canal)
@@ -39,7 +39,6 @@ def normalizar(im):
 
 # Función que comprueba si una imagen está en grises
 
-
 def esGris(im):
     # Las imágenes en grises tienen 2 dimensiones
     if len(im.shape) == 2:
@@ -48,7 +47,6 @@ def esGris(im):
         return False
 
 # Función que muestra una imagen ya cargada
-
 
 def mostrarImagen(im, dibujar=True, titulo=None, norm=True):
     # Normalizar imagen
@@ -78,7 +76,6 @@ def mostrarImagen(im, dibujar=True, titulo=None, norm=True):
 
 # Función que muestra varias imágenes ya cargadas
 
-
 def mostrarVariasImagenes(vim, titulos=[], reparto=(0, 0), dimensiones=(9, 9),
                           norm=True):
 
@@ -99,8 +96,30 @@ def mostrarVariasImagenes(vim, titulos=[], reparto=(0, 0), dimensiones=(9, 9),
         mostrarImagen(vim[i], dibujar=False, norm=norm)
     plt.show()
 
+# Función para cargar todos los sets de imágenes fuente/destino/máscaras
+
+def cargaConjuntoImagenes():
+    mascaras = []
+    fuentes = []
+    destinos = []
+
+    for img in sorted(listdir("imagenes/masks")):
+        mascara = cargarImagen("imagenes/masks/" + img, 0)
+        mascara = np.array(mascara, dtype=np.uint8)
+        x, mascara = cv2.threshold(mascara, 0, 255, cv2.THRESH_OTSU)
+        mascaras.append(mascara)
+
+    for img in sorted(listdir("imagenes/source")):
+        fuentes.append(cargarImagen("imagenes/source/" + img, 1))
+
+    for img in sorted(listdir("imagenes/target")):
+        destinos.append(cargarImagen("imagenes/target/" + img, 1))
+
+    return fuentes, mascaras, destinos
+
 ################################################################################
 
+# Devuelve omega: los píxeles (índices) dentro de la máscara
 
 def getPosicionesMascara(mascara):
     pos_y, pos_x = np.nonzero(mascara)
@@ -110,6 +129,7 @@ def getPosicionesMascara(mascara):
         posiciones.append((pos_y[i], pos_x[i]))
     return posiciones
 
+# Devuelve las posiciones adyacentes (vecinos) de una dada
 
 def getVecindario(pos):
     i, j = pos
@@ -117,6 +137,8 @@ def getVecindario(pos):
     vecindario = [(i+1, j), (i-1, j), (i, j+1), (i, j-1)]
     return vecindario
 
+# Calcula la matriz de Poisson, es decir, la matriz de coeficientes A para
+# un omega dado
 
 def matriz_poisson(omega):
     # Calculamos el número de píxeles de omega (máscara)
@@ -125,6 +147,7 @@ def matriz_poisson(omega):
     A = sparse.lil_matrix((N, N))
 
     for i, posicion in enumerate(omega):
+        progress_bar(i, N-1)  # OJO
         A[i, i] = 4
 
         for vecino in getVecindario(posicion):
@@ -134,6 +157,7 @@ def matriz_poisson(omega):
 
     return A
 
+# Comprueba si una posición es parte de la frontera de omega
 
 def esBorde(omega, posicion):
     if posicion in omega:
@@ -143,6 +167,7 @@ def esBorde(omega, posicion):
 
     return False
 
+# Calcula el valor del borde en la imagen destino, necesario para el vector b
 
 def calcularValorBorde(omega, mascara, posicion, destino):
     valorBorde = 0
@@ -156,6 +181,7 @@ def calcularValorBorde(omega, mascara, posicion, destino):
 
     return valorBorde
 
+# Comprueba que una posición esté dentro de la imagen
 
 def dentroImagen(imagen, posicion):
     if posicion[0] >= 0 and posicion[0] < imagen.shape[0] and \
@@ -164,6 +190,7 @@ def dentroImagen(imagen, posicion):
     else:
         return False
 
+# Calcula laplaciana de un píxel
 
 def getLaplaciana(fuente, posicion):
     laplaciana = 0
@@ -173,22 +200,13 @@ def getLaplaciana(fuente, posicion):
 
     return laplaciana
 
-
-def calcularDivGuia(omega, mascara, fuente, destino):
-    b = np.zeros(len(omega))
-    for i in range(len(omega)):
-        b[i] = getLaplaciana(fuente, omega[i]) + \
-            calcularValorBorde(omega, mascara, omega[i], destino)
-
-    return b
-
+# Calcula la laplaciana de un píxel acorde al criterio de MixingGradientes: en
+# cada dirección, se usa el gradiente de mayor valor entre la imagen fuente y destino
 
 def getLaplacianaMix(fuente, destino, posicion):
     laplaciana = 0
     for vecino in getVecindario(posicion):
         if dentroImagen(fuente, vecino):
-            # i,j = posicion
-            # i_vecino, j_vecino = vecino
             grad_fuente = fuente[posicion] - fuente[vecino]
             grad_destino = destino[posicion] - destino[vecino]
             if abs(grad_fuente) > abs(grad_destino):
@@ -198,96 +216,102 @@ def getLaplacianaMix(fuente, destino, posicion):
 
     return laplaciana
 
+# Calcula la diverguencia del campo guía (valores vector b). Se calcula esta
+# diverguencia para dos posibles v (el de importing gradientes y el de mixing
+# gradients)
 
-def calcularDivGuiaMix(omega, mascara, fuente, destino):
-    b = np.zeros(len(omega))
+def calcularDivGuia(omega, mascara, fuente, destino):
+    N = len(omega)
+    b_import = np.zeros(N)
+    b_mix = np.zeros(N)
 
-    for i in range(len(omega)):
-        b[i] = getLaplacianaMix(fuente, destino, omega[i]) + \
-            calcularValorBorde(omega, mascara, omega[i], destino)
+    for i in range(N):
+        progress_bar(i, len(omega)-1)  # OJO
+        valorBorde = calcularValorBorde(omega, mascara, omega[i], destino)
+        b_import[i] = getLaplaciana(fuente, omega[i]) + valorBorde
+        b_mix[i] = getLaplacianaMix(fuente, destino, omega[i]) + valorBorde
 
-    return b
+    return b_import, b_mix
 
 ################################################################################
 
+
+def progress_bar(n, N):
+    '''
+    print current progress
+    '''
+
+    step = 2
+    percent = float(n) / float(N) * 100
+
+    # convert percent to bar
+    current = "#" * int(percent//step)
+    remain = " " * int(100/step-int(percent//step))
+    bar = "|{}{}|".format(current, remain)
+    print("\r{}:{:3.0f}[%]".format(bar, percent), end="", flush=True)
+
+
+# Devuelve tres imágenes (copia/pega en imágenes según criterios distintos):
+#   -> Pegado directo, Poisson Blending con Importing Gradients y
+#       Poisson Blending con Mixing Gradients
 # mascara, fuente y destino son 3 imágenes del mismo tamaño (fil*col).
 # mascara es en blanco y negro (0/255)
 # fuente y destino son en color (3 canales)
 
-
-def poisson_blending(mascara, fuente, destino, mixingGradients):
+def poisson_blending(mascara, fuente, destino):
     # Queremos obtener f tal que lapl(f) = div(v) = lapl(fuente) dentro de la máscara,
     # y f(borde) = destino(borde), donde borde es el borde de la máscara (está dentro)
     # f fuera de la máscara tendrá los valores de destino
 
-    print(destino.shape)
+    # Cada solución (solapado, import_gradients y mixing_gradients)
+    # se inicializa con los valores de la imagen destino
+    solucion_cloning = np.copy(destino)
+    solucion_import = np.copy(destino)
+    solucion_mix = np.copy(destino)
 
-    # Lista con coordenadas píxeles máscara
+    # Lista con los índices píxeles máscara
     omega = getPosicionesMascara(mascara)
 
-    print("Calculando A")
+    # 1. Calcular matriz de coeficientes para omega
+    print("\nCalculando A")
     A = matriz_poisson(omega)
 
-    u = []
+    # Para cada canal
+    for canal in range(destino.shape[2]):
 
-    for canal in range(3):
-        print("Calculando b")
-        # Calcular b en canal
-        if (mixingGradients):
-            b = calcularDivGuiaMix(
-                omega, mascara, fuente[:, :, canal], destino[:, :, canal])
-        else:
-            b = calcularDivGuia(
-                omega, mascara, fuente[:, :, canal], destino[:, :, canal])
+        print(f"\nCÁLCULOS CANAL {canal}")
 
-        print("Calculando u")
-        # Resolver Au=b en canal y guardar u
-        u_canal, x = linalg.cg(A, b)
-        u.append(u_canal)
-        # print(np.max(b))
-        # print(np.min(b))
-        # print(np.max(u_canal))
-        # print(np.min(u_canal))
+        # 2.1 Calcular vector columna b para importing y mixing
 
-    solucion = np.copy(destino)
+        print("Calculando b para importing gradients y para mixing gradients")
+        b_import, b_mix = calcularDivGuia(
+            omega, mascara, fuente[:, :, canal], destino[:, :, canal])
 
-    print("Calculando solución final")
-    for i, posicion in enumerate(omega):
-        for canal in range(3):
-            pos_y, pos_x = posicion
-            solucion[pos_y, pos_x, canal] = u[canal][i]
+        # 2.2 Resolver A*f_omega=b
 
-    return np.clip(solucion, 0, 1)
+        print("\nCalculando f_omega para importing gradients")
+        f_omega_import, _ = linalg.cg(A, b_import)
 
-    ############################################################################
-    # Resolver Au = b
-    #   A: Matriz poisson
-    #   b: (g) (parte de la imagen fuente en omega/mascara)
-    #   u: solución (valores finales de los píxeles)
+        print("Calculando f_omega para mixing gradients")
+        f_omega_mix, _ = linalg.cg(A, b_mix)
 
-    # Sacar máscara bordes (frontera) a partir de la máscara dada
-    # Sacar región omega
+        # 2.3 Incorporar f_omega a f
 
-    # Crear matriz A a partir de omega y mascara: coefficient_matrix
+        print(
+            f"Añadiendo los valores calculados al canal {canal} correspondiente en cada solución")
 
-    # Crear la matriz (vector) de gradientes de tamaño num_filas de omega
-    #   Mixing_gradients a partir de fuente, destino, omega y frontera
-    #       -> Hacer esto para cada canal
+        for i, posicion in enumerate(omega):
+            solucion_cloning[posicion[0], posicion[1],
+                             canal] = fuente[posicion[0], posicion[1], canal]
+            solucion_import[posicion[0], posicion[1],
+                            canal] = f_omega_import[i]
+            solucion_mix[posicion[0], posicion[1], canal] = f_omega_mix[i]
 
-    # Resolver, para cada canal, Au = b (sp.linalg.cg) -> devuelve u
+    # Devolver todas las soluciones, con valores entre 0 y 1
+    return solucion_cloning, np.clip(solucion_import, 0, 255), np.clip(solucion_mix, 0, 255)
 
-    # Devolver el resultado como el destino sobreescribiendo las poisiciones
-    # de omega con las de u
-    ############################################################################
-
-    # 1. Obtener laplaciana(fuente) dentro de la máscara -> (B)
-
-    # 2. Obtener matriz A operador laplaciano con las dimensiones correspondientes a la máscara
-    #
-    # 3. Resolver Ax = B (función scipy)
-
-    # 4. Construir f como la imagen destino con los valores de x dentro de la máscara
-
+# Función para aplicar un offset a la máscara, y así colocar en un lugar concreto
+# de la imagen destino
 
 def aplicarDesplazamiento(fuente, mascara, despl):
     resultado = np.zeros(fuente.shape)
@@ -302,32 +326,22 @@ def aplicarDesplazamiento(fuente, mascara, despl):
 
     return resultado, mask_resultado
 
-
-def superponer(mascara, fuente, destino):
-    posiciones = getPosicionesMascara(mascara)
-    resultado = np.copy(destino)
-
-    for pos in posiciones:
-        resultado[pos] = fuente[pos]
-
-    return resultado
-
+# Función principal
 
 def main():
-    mascara = cargarImagen('imagenes/mask.jpg', 0)
-    mascara = np.array(mascara, dtype=np.uint8)
-    x, mascara = cv2.threshold(mascara, 0, 255, cv2.THRESH_OTSU)
-    fuente = cargarImagen('imagenes/luna.jpg', 1)
-    destino = cargarImagen('imagenes/playa.jpg', 1)
 
-    despl = (20, 0)
+    # Carga de imágenes
+    fuentes, mascaras, destinos = cargaConjuntoImagenes()
+
+    #despl = (20, 0)
     #fuente, mascara = aplicarDesplazamiento(fuente, mascara, despl)
-    mostrarImagen(mascara)
-    resultado = poisson_blending(
-        mascara/255.0, fuente/255.0, destino/255.0, True)
-    # print(np.max(resultado))
-    # print(np.min(resultado))
-    mostrarImagen(resultado)
+
+    res_cloning, res_import, res_mix = poisson_blending(
+        mascaras[0], fuentes[0], destinos[0])
+
+    mostrarVariasImagenes([res_cloning, res_import, res_mix])
+
+################################################################################
 
 
 main()
