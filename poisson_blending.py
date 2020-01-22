@@ -267,6 +267,13 @@ def getLaplacianaMix(fuente, destino, posicion, despl):
                 laplaciana += grad_fuente
             else:
                 laplaciana += grad_destino
+        elif dentroImagen(destino, vecino+despl):
+            grad_destino = destino[tuple(
+                posicion+despl)] - destino[tuple(vecino+despl)]
+            laplaciana += grad_destino
+        elif: dentroImagen(fuente, vecino):
+            grad_fuente = fuente[posicion] - fuente[vecino]
+            laplaciana += grad_fuente
 
     return laplaciana
 
@@ -415,7 +422,7 @@ def pegarOsoNiñosPlaya():
         res1_import, res1_mixing = poisson_blending(mask_oso, oso, destino, despl_oso)
         res2_import, _ = poisson_blending(mask_niño, niños, res1_import, despl_niño)
         _, res2_mixing = poisson_blending(mask_niño, niños, res1_mixing, despl_niño)
-        _, res3_mixing = poisson_blending(mask_niña, niños, res2_mixing, despl_niño)
+        _, res3_mixing = poisson_blending(mask_niña, niños, res2_mixing, despl_niña)
         res3_import, _ = poisson_blending(mask_niña, niños, res2_import, despl_niña)
 
         mostrarVariasImagenes([res_paste, res3_import, res3_mixing], norm=False)
