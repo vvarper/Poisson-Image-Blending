@@ -169,15 +169,15 @@ def esBorde(omega, posicion):
 
 # Calcula el valor del borde en la imagen destino, necesario para el vector b
 
-def calcularValorBorde(omega, mascara, posicion, destino):
+def calcularValorBorde(omega, posicion, destino, despl):
     valorBorde = 0
     if (esBorde(omega, posicion)):
         for vecino in getVecindario(posicion):
             if not vecino in omega:
-                if dentroImagen(destino, vecino):
-                    valorBorde += destino[vecino]
+                if dentroImagen(destino, vecino + despl):
+                    valorBorde += destino[tuple(vecino + despl)]
                 else:
-                    valorBorde += destino[posicion]
+                    valorBorde += destino[tuple(posicion + despl)]
 
     return valorBorde
 
@@ -203,12 +203,12 @@ def getLaplaciana(fuente, posicion):
 # Calcula la laplaciana de un píxel acorde al criterio de MixingGradientes: en
 # cada dirección, se usa el gradiente de mayor valor entre la imagen fuente y destino
 
-def getLaplacianaMix(fuente, destino, posicion):
+def getLaplacianaMix(fuente, destino, posicion, despl):
     laplaciana = 0
     for vecino in getVecindario(posicion):
         if dentroImagen(fuente, vecino):
             grad_fuente = fuente[posicion] - fuente[vecino]
-            grad_destino = destino[posicion] - destino[vecino]
+            grad_destino = destino[tuple(posicion+despl)] - destino[tuple(vecino+despl)]
             if abs(grad_fuente) > abs(grad_destino):
                 laplaciana += grad_fuente
             else:
@@ -220,16 +220,16 @@ def getLaplacianaMix(fuente, destino, posicion):
 # diverguencia para dos posibles v (el de importing gradientes y el de mixing
 # gradients)
 
-def calcularDivGuia(omega, mascara, fuente, destino):
+def calcularDivGuia(omega, fuente, destino, despl):
     N = len(omega)
     b_import = np.zeros(N)
     b_mix = np.zeros(N)
 
     for i in range(N):
         progress_bar(i, len(omega)-1)  # OJO
-        valorBorde = calcularValorBorde(omega, mascara, omega[i], destino)
+        valorBorde = calcularValorBorde(omega, omega[i], destino, despl)
         b_import[i] = getLaplaciana(fuente, omega[i]) + valorBorde
-        b_mix[i] = getLaplacianaMix(fuente, destino, omega[i]) + valorBorde
+        b_mix[i] = getLaplacianaMix(fuente, destino, omega[i], despl) + valorBorde
 
     return b_import, b_mix
 
@@ -258,19 +258,18 @@ def progress_bar(n, N):
 # mascara es en blanco y negro (0/255)
 # fuente y destino son en color (3 canales)
 
-def poisson_blending(mascara, fuente, destino):
+def poisson_blending(omega, fuente, destino, despl):
     # Queremos obtener f tal que lapl(f) = div(v) = lapl(fuente) dentro de la máscara,
     # y f(borde) = destino(borde), donde borde es el borde de la máscara (está dentro)
     # f fuera de la máscara tendrá los valores de destino
 
     # Cada solución (solapado, import_gradients y mixing_gradients)
     # se inicializa con los valores de la imagen destino
-    solucion_cloning = np.copy(destino)
     solucion_import = np.copy(destino)
     solucion_mix = np.copy(destino)
 
     # Lista con los índices píxeles máscara
-    omega = getPosicionesMascara(mascara)
+    #omega = getPosicionesMascara(mascara)
 
     print(f"Número de píxeles a modificar: {len(omega)}")
 
@@ -287,7 +286,7 @@ def poisson_blending(mascara, fuente, destino):
 
         print("Calculando b para importing gradients y para mixing gradients")
         b_import, b_mix = calcularDivGuia(
-            omega, mascara, fuente[:, :, canal], destino[:, :, canal])
+            omega, fuente[:, :, canal], destino[:, :, canal], despl)
 
         # 2.2 Resolver A*f_omega=b
 
@@ -303,47 +302,88 @@ def poisson_blending(mascara, fuente, destino):
             f"Añadiendo los valores calculados al canal {canal} correspondiente en cada solución")
 
         for i, posicion in enumerate(omega):
-            solucion_cloning[posicion[0], posicion[1],
-                             canal] = fuente[posicion[0], posicion[1], canal]
-            solucion_import[posicion[0], posicion[1],
+            solucion_import[posicion[0]+despl[0], posicion[1]+despl[1],
                             canal] = f_omega_import[i]
-            solucion_mix[posicion[0], posicion[1], canal] = f_omega_mix[i]
+            solucion_mix[posicion[0]+despl[0], posicion[1]+despl[1], canal] = f_omega_mix[i]
 
     # Devolver todas las soluciones, con valores entre 0 y 1
-    return solucion_cloning, np.clip(solucion_import, 0, 255), np.clip(solucion_mix, 0, 255)
+    return np.clip(solucion_import, 0, 255), np.clip(solucion_mix, 0, 255)
 
 # Función para aplicar un offset a la máscara, y así colocar en un lugar concreto
 # de la imagen destino
 
-def aplicarDesplazamiento(fuente, mascara, despl):
+def aplicarDesplazamiento(fuente, despl):
     resultado = np.zeros(fuente.shape)
-    mask_resultado = np.zeros(mascara.shape)
+    #mask_resultado = np.zeros(mascara.shape)
 
     for i in range(fuente.shape[0]):
         for j in range(fuente.shape[1]):
             if i+despl[0] >= 0 and i+despl[0] < fuente.shape[0] and \
                     j+despl[1] >= 0 and j+despl[1] < fuente.shape[1]:
                 resultado[i+despl[0], j+despl[1]] = fuente[i, j]
-                mask_resultado[i+despl[0], j+despl[1]] = mascara[i, j]
+                #mask_resultado[i+despl[0], j+despl[1]] = mascara[i, j]
 
-    return resultado, mask_resultado
+    return resultado#, mask_resultado
 
-# Función principal
-
-def main():
-
-    # Carga de imágenes
-    fuentes, mascaras, destinos = cargaConjuntoImagenes()
-
-    #despl = (20, 0)
-    #fuente, mascara = aplicarDesplazamiento(fuente, mascara, despl)
-
-    res_cloning, res_import, res_mix = poisson_blending(
-        mascaras[0], fuentes[0], destinos[0])
-
-    mostrarVariasImagenes([res_cloning, res_import, res_mix])
 
 ################################################################################
 
+# Función para obtener las posiciones en la imagen fuente del objeto a pegar
+# Se debe especificar una ruta con la imagen de la máscara (blanco/negro)
+def getObjeto(nombre_mascara):
+    ruta_mascara = "imagenes/masks/"
+    mascara = np.array(cargarImagen(ruta_mascara + "mask1.jpg", 0), dtype=np.uint8)
+    _, mascara = cv2.threshold(mascara, 0, 255, cv2.THRESH_OTSU)
+    
+    posiciones_objeto = getPosicionesMascara(mascara)
+    return posiciones_objeto
 
-main()
+def calcularDesplazamiento(pos_dest, objeto, destino=None):
+
+    if not type(pos_dest[0]) is int:
+        pos_dest[0] = int(destino.shape[0]*pos_dest[0])
+    if not type(pos_dest[1]) is int: 
+        pos_dest[1] = int(destino.shape[1]*pos_dest[1])
+
+    pos_dest = np.array(pos_dest, dtype=np.uint8)
+    print(pos_dest)
+
+    posiciones = np.array(objeto)
+    max_x = np.max(posiciones[:,1])
+    min_x = np.min(posiciones[:,1])
+    max_y = np.max(posiciones[:,0])
+    min_y = np.min(posiciones[:,0])
+    print(f"{max_y} {min_y} {max_x} {min_x}")
+
+    x_centro = int((max_x + min_x) / 2)
+    y_centro = int((max_y + min_y) / 2)
+    print(f"{y_centro} {x_centro}")
+
+    return pos_dest - (y_centro, x_centro)
+
+def pegarObjeto(omega, fuente, destino, despl):
+    solucion = np.copy(destino)
+    for posicion in omega:
+        pos_dest = tuple(posicion+despl)
+        if dentroImagen(destino, pos_dest):
+            solucion[pos_dest] = fuente[posicion]
+
+    return solucion
+
+
+def pegarAvionEnMontania():
+    objeto = getObjeto("mask1.jpg")
+    fuente = cargarImagen("imagenes/sources/source1.jpg", 1)
+    destino = cargarImagen("imagenes/targets/target1.jpg", 1)
+
+    pos_dest = [25, 50]
+    despl = calcularDesplazamiento(pos_dest, objeto, destino)
+    #print(despl)
+
+    res_cloning = pegarObjeto(objeto, fuente, destino, despl)
+    mostrarImagen(res_cloning)
+
+    res_import, res_mixing = poisson_blending(objeto, fuente, destino, despl)
+    mostrarVariasImagenes([res_cloning, res_import, res_mixing])
+
+pegarAvionEnMontania()
