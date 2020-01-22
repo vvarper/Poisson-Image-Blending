@@ -271,7 +271,7 @@ def getLaplacianaMix(fuente, destino, posicion, despl):
             grad_destino = destino[tuple(
                 posicion+despl)] - destino[tuple(vecino+despl)]
             laplaciana += grad_destino
-        elif: dentroImagen(fuente, vecino):
+        elif dentroImagen(fuente, vecino):
             grad_fuente = fuente[posicion] - fuente[vecino]
             laplaciana += grad_fuente
 
