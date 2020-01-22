@@ -15,12 +15,14 @@ from os.path import isfile, join
 
 # Función para cargar una imagen con valores de tipo float
 
+
 def cargarImagen(filename, flagColor):
     imagen = cv2.imread(filename, flagColor)
 
     return imagen.astype(float)
 
 # Función para normalizar una imagen 0-255, uint8
+
 
 def normalizar(im):
     # Buscar máximo y mínimo en cada canal (si está en grises, hay un solo canal)
@@ -33,11 +35,10 @@ def normalizar(im):
     else:
         imagen_normalizada = np.uint8(im)
 
-    #imagen_normalizada = np.array(im * 255, dtype=np.uint8)
-
     return imagen_normalizada
 
 # Función que comprueba si una imagen está en grises
+
 
 def esGris(im):
     # Las imágenes en grises tienen 2 dimensiones
@@ -48,12 +49,14 @@ def esGris(im):
 
 # Función que muestra una imagen ya cargada
 
-def mostrarImagen(im, dibujar=True, titulo=None, norm=True):
+
+def mostrarImagen(im, dibujar=True, titulo=None, norm=False):
     # Normalizar imagen
     if norm:
         imagen_norm = normalizar(im)
     else:
         imagen_norm = im.copy()
+        imagen_norm = np.uint8(imagen_norm)
 
     # En primer lugar, se eliminan las dimensiones de los bordes de la imagen
     # mostradas por defecto con pyplot
@@ -76,6 +79,7 @@ def mostrarImagen(im, dibujar=True, titulo=None, norm=True):
 
 # Función que muestra varias imágenes ya cargadas
 
+
 def mostrarVariasImagenes(vim, titulos=[], reparto=(0, 0), dimensiones=(9, 9),
                           norm=True):
 
@@ -96,30 +100,72 @@ def mostrarVariasImagenes(vim, titulos=[], reparto=(0, 0), dimensiones=(9, 9),
         mostrarImagen(vim[i], dibujar=False, norm=norm)
     plt.show()
 
-# Función para cargar todos los sets de imágenes fuente/destino/máscaras
-
-def cargaConjuntoImagenes():
-    mascaras = []
-    fuentes = []
-    destinos = []
-
-    for img in sorted(listdir("imagenes/masks")):
-        mascara = cargarImagen("imagenes/masks/" + img, 0)
-        mascara = np.array(mascara, dtype=np.uint8)
-        x, mascara = cv2.threshold(mascara, 0, 255, cv2.THRESH_OTSU)
-        mascaras.append(mascara)
-
-    for img in sorted(listdir("imagenes/sources")):
-        fuentes.append(cargarImagen("imagenes/sources/" + img, 1))
-
-    for img in sorted(listdir("imagenes/targets")):
-        destinos.append(cargarImagen("imagenes/targets/" + img, 1))
-
-    return fuentes, mascaras, destinos
-
 ################################################################################
 
+# Función para obtener las posiciones en la imagen fuente del objeto a pegar
+# Se debe especificar una ruta con la imagen de la máscara (blanco/negro)
+
+
+def getObjeto(nombre_mascara):
+    ruta_mascara = "imagenes/masks/"
+    mascara = np.array(cargarImagen(
+        ruta_mascara + nombre_mascara, 0), dtype=np.uint8)
+    _, mascara = cv2.threshold(mascara, 0, 255, cv2.THRESH_OTSU)
+
+    posiciones_objeto = getPosicionesMascara(mascara)
+    return posiciones_objeto
+
+# Función para calcular el desplazamiento necesario en una máscara para que
+# el centro de esta quede en una posición concreta de la imagen destino
+# Se devuelve también un booleano que indica si con ese desplazamiento el objeto
+# se sale de la imagen destino
+
+
+def calcularDesplazamiento(pos_dest, objeto, destino):
+
+    # Si se pasan reales en pos_dest, se interpreta como un porcentaje
+    # respecto al tamaño de la imagen destino. En caso contrario, son coordenadas
+    # directas.
+    if not type(pos_dest[0]) is int:
+        pos_dest[0] = int(destino.shape[0]*pos_dest[0])
+    if not type(pos_dest[1]) is int:
+        pos_dest[1] = int(destino.shape[1]*pos_dest[1])
+    pos_dest = np.array(pos_dest, dtype=np.uint32)
+
+    # Obtener los extremos de la máscara y calcular su centro
+    posiciones = np.array(objeto)
+    max_x = np.max(posiciones[:, 1])
+    min_x = np.min(posiciones[:, 1])
+    max_y = np.max(posiciones[:, 0])
+    min_y = np.min(posiciones[:, 0])
+
+    x_centro = int((max_x + min_x) / 2)
+    y_centro = int((max_y + min_y) / 2)
+
+    # Obtener el desplazamiento como la diferencia del objetivo con el centro
+    # de la máscara
+    despl = pos_dest - (y_centro, x_centro)
+
+    # Comprobar si es un desplazamiento válido
+    despl_valido = False
+    if dentroImagen(destino, [max_y, max_x] + despl) and dentroImagen(destino, [min_y, min_x] + despl):
+        despl_valido = True
+
+    return despl, despl_valido
+
+# Pegar un objeto de forma directa con un desplazamiento dado
+
+
+def pegarObjeto(omega, fuente, destino, despl):
+    solucion = np.copy(destino)
+    for posicion in omega:
+        pos_dest = tuple(posicion+despl)
+        solucion[pos_dest] = fuente[posicion]
+
+    return solucion
+
 # Devuelve omega: los píxeles (índices) dentro de la máscara
+
 
 def getPosicionesMascara(mascara):
     pos_y, pos_x = np.nonzero(mascara)
@@ -131,6 +177,7 @@ def getPosicionesMascara(mascara):
 
 # Devuelve las posiciones adyacentes (vecinos) de una dada
 
+
 def getVecindario(pos):
     i, j = pos
 
@@ -139,6 +186,7 @@ def getVecindario(pos):
 
 # Calcula la matriz de Poisson, es decir, la matriz de coeficientes A para
 # un omega dado
+
 
 def matriz_poisson(omega):
     # Calculamos el número de píxeles de omega (máscara)
@@ -159,6 +207,7 @@ def matriz_poisson(omega):
 
 # Comprueba si una posición es parte de la frontera de omega
 
+
 def esBorde(omega, posicion):
     if posicion in omega:
         for vecino in getVecindario(posicion):
@@ -168,6 +217,7 @@ def esBorde(omega, posicion):
     return False
 
 # Calcula el valor del borde en la imagen destino, necesario para el vector b
+
 
 def calcularValorBorde(omega, posicion, destino, despl):
     valorBorde = 0
@@ -183,6 +233,7 @@ def calcularValorBorde(omega, posicion, destino, despl):
 
 # Comprueba que una posición esté dentro de la imagen
 
+
 def dentroImagen(imagen, posicion):
     if posicion[0] >= 0 and posicion[0] < imagen.shape[0] and \
             posicion[1] >= 0 and posicion[1] < imagen.shape[1]:
@@ -191,6 +242,7 @@ def dentroImagen(imagen, posicion):
         return False
 
 # Calcula laplaciana de un píxel
+
 
 def getLaplaciana(fuente, posicion):
     laplaciana = 0
@@ -203,12 +255,14 @@ def getLaplaciana(fuente, posicion):
 # Calcula la laplaciana de un píxel acorde al criterio de MixingGradientes: en
 # cada dirección, se usa el gradiente de mayor valor entre la imagen fuente y destino
 
+
 def getLaplacianaMix(fuente, destino, posicion, despl):
     laplaciana = 0
     for vecino in getVecindario(posicion):
-        if dentroImagen(fuente, vecino):
+        if dentroImagen(destino, vecino+despl):
             grad_fuente = fuente[posicion] - fuente[vecino]
-            grad_destino = destino[tuple(posicion+despl)] - destino[tuple(vecino+despl)]
+            grad_destino = destino[tuple(
+                posicion+despl)] - destino[tuple(vecino+despl)]
             if abs(grad_fuente) > abs(grad_destino):
                 laplaciana += grad_fuente
             else:
@@ -220,6 +274,7 @@ def getLaplacianaMix(fuente, destino, posicion, despl):
 # diverguencia para dos posibles v (el de importing gradientes y el de mixing
 # gradients)
 
+
 def calcularDivGuia(omega, fuente, destino, despl):
     N = len(omega)
     b_import = np.zeros(N)
@@ -229,7 +284,8 @@ def calcularDivGuia(omega, fuente, destino, despl):
         progress_bar(i, len(omega)-1)  # OJO
         valorBorde = calcularValorBorde(omega, omega[i], destino, despl)
         b_import[i] = getLaplaciana(fuente, omega[i]) + valorBorde
-        b_mix[i] = getLaplacianaMix(fuente, destino, omega[i], despl) + valorBorde
+        b_mix[i] = getLaplacianaMix(
+            fuente, destino, omega[i], despl) + valorBorde
 
     return b_import, b_mix
 
@@ -304,71 +360,15 @@ def poisson_blending(omega, fuente, destino, despl):
         for i, posicion in enumerate(omega):
             solucion_import[posicion[0]+despl[0], posicion[1]+despl[1],
                             canal] = f_omega_import[i]
-            solucion_mix[posicion[0]+despl[0], posicion[1]+despl[1], canal] = f_omega_mix[i]
+            solucion_mix[posicion[0]+despl[0], posicion[1] +
+                         despl[1], canal] = f_omega_mix[i]
 
     # Devolver todas las soluciones, con valores entre 0 y 1
     return np.clip(solucion_import, 0, 255), np.clip(solucion_mix, 0, 255)
 
-# Función para aplicar un offset a la máscara, y así colocar en un lugar concreto
-# de la imagen destino
-
-def aplicarDesplazamiento(fuente, despl):
-    resultado = np.zeros(fuente.shape)
-    #mask_resultado = np.zeros(mascara.shape)
-
-    for i in range(fuente.shape[0]):
-        for j in range(fuente.shape[1]):
-            if i+despl[0] >= 0 and i+despl[0] < fuente.shape[0] and \
-                    j+despl[1] >= 0 and j+despl[1] < fuente.shape[1]:
-                resultado[i+despl[0], j+despl[1]] = fuente[i, j]
-                #mask_resultado[i+despl[0], j+despl[1]] = mascara[i, j]
-
-    return resultado#, mask_resultado
-
-
 ################################################################################
 
-# Función para obtener las posiciones en la imagen fuente del objeto a pegar
-# Se debe especificar una ruta con la imagen de la máscara (blanco/negro)
-def getObjeto(nombre_mascara):
-    ruta_mascara = "imagenes/masks/"
-    mascara = np.array(cargarImagen(ruta_mascara + "mask1.jpg", 0), dtype=np.uint8)
-    _, mascara = cv2.threshold(mascara, 0, 255, cv2.THRESH_OTSU)
-    
-    posiciones_objeto = getPosicionesMascara(mascara)
-    return posiciones_objeto
-
-def calcularDesplazamiento(pos_dest, objeto, destino=None):
-
-    if not type(pos_dest[0]) is int:
-        pos_dest[0] = int(destino.shape[0]*pos_dest[0])
-    if not type(pos_dest[1]) is int: 
-        pos_dest[1] = int(destino.shape[1]*pos_dest[1])
-
-    pos_dest = np.array(pos_dest, dtype=np.uint8)
-    print(pos_dest)
-
-    posiciones = np.array(objeto)
-    max_x = np.max(posiciones[:,1])
-    min_x = np.min(posiciones[:,1])
-    max_y = np.max(posiciones[:,0])
-    min_y = np.min(posiciones[:,0])
-    print(f"{max_y} {min_y} {max_x} {min_x}")
-
-    x_centro = int((max_x + min_x) / 2)
-    y_centro = int((max_y + min_y) / 2)
-    print(f"{y_centro} {x_centro}")
-
-    return pos_dest - (y_centro, x_centro)
-
-def pegarObjeto(omega, fuente, destino, despl):
-    solucion = np.copy(destino)
-    for posicion in omega:
-        pos_dest = tuple(posicion+despl)
-        if dentroImagen(destino, pos_dest):
-            solucion[pos_dest] = fuente[posicion]
-
-    return solucion
+################################################################################
 
 
 def pegarAvionEnMontania():
@@ -376,14 +376,18 @@ def pegarAvionEnMontania():
     fuente = cargarImagen("imagenes/sources/source1.jpg", 1)
     destino = cargarImagen("imagenes/targets/target1.jpg", 1)
 
-    pos_dest = [25, 50]
-    despl = calcularDesplazamiento(pos_dest, objeto, destino)
-    #print(despl)
+    pos_dest = [0.5, 0.5]
+    despl, despl_valido = calcularDesplazamiento(pos_dest, objeto, destino)
 
-    res_cloning = pegarObjeto(objeto, fuente, destino, despl)
-    mostrarImagen(res_cloning)
+    if (despl_valido):
+        res_cloning = pegarObjeto(objeto, fuente, destino, despl)
+        mostrarImagen(res_cloning)
 
-    res_import, res_mixing = poisson_blending(objeto, fuente, destino, despl)
-    mostrarVariasImagenes([res_cloning, res_import, res_mixing])
+        res_import, res_mixing = poisson_blending(
+            objeto, fuente, destino, despl)
+        mostrarVariasImagenes([res_cloning, res_import, res_mixing])
+    else:
+        print("Posición destino no válida: el objeto se sale de la imagen")
+
 
 pegarAvionEnMontania()
