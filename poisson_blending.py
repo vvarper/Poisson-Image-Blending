@@ -259,7 +259,7 @@ def getLaplaciana(fuente, posicion):
 def getLaplacianaMix(fuente, destino, posicion, despl):
     laplaciana = 0
     for vecino in getVecindario(posicion):
-        if dentroImagen(destino, vecino+despl):
+        if dentroImagen(destino, vecino+despl) and dentroImagen(fuente, vecino):
             grad_fuente = fuente[posicion] - fuente[vecino]
             grad_destino = destino[tuple(
                 posicion+despl)] - destino[tuple(vecino+despl)]
@@ -389,5 +389,41 @@ def pegarAvionEnMontania():
     else:
         print("Posición destino no válida: el objeto se sale de la imagen")
 
+def pegarOsoNiñosPlaya():
+    mask_niño = getObjeto("mask_niño.jpg")
+    mask_oso = getObjeto("mask_oso.jpg")
+    mask_niña = getObjeto("mask_niña.jpg")
+    niños = cargarImagen("imagenes/sources/niños.png", 1)
+    oso = cargarImagen("imagenes/sources/oso.jpg", 1)
+    destino = cargarImagen("imagenes/targets/perez_water.jpg", 1)
 
-pegarAvionEnMontania()
+    pos_dest_oso = [0.25, 0.5]
+    despl_oso, despl_valido1 = calcularDesplazamiento(pos_dest_oso, mask_oso, destino)
+
+    pos_niño = [0.75, 0.65]
+    despl_niño, despl_valido2 = calcularDesplazamiento(pos_niño, mask_niño, destino)
+
+    pos_niña = [0.75, 0.45]
+    despl_niña, despl_valido3 = calcularDesplazamiento(pos_niña, mask_niña, destino)
+
+    if despl_valido1 and despl_valido2 and despl_valido3:
+        res_paste = pegarObjeto(mask_oso, oso, destino, despl_oso)
+        res_paste = pegarObjeto(mask_niño, niños, res_paste, despl_niño)
+        res_paste = pegarObjeto(mask_niña, niños, res_paste, despl_niña)
+        mostrarImagen(res_paste)
+
+        res1_import, res1_mixing = poisson_blending(mask_oso, oso, destino, despl_oso)
+        res2_import, _ = poisson_blending(mask_niño, niños, res1_import, despl_niño)
+        _, res2_mixing = poisson_blending(mask_niño, niños, res1_mixing, despl_niño)
+        _, res3_mixing = poisson_blending(mask_niña, niños, res2_mixing, despl_niño)
+        res3_import, _ = poisson_blending(mask_niña, niños, res2_import, despl_niña)
+
+        mostrarVariasImagenes([res_paste, res3_import, res3_mixing], norm=False)
+        cv2.imwrite('salidas/oso_niños_paste.png',res_paste)
+        cv2.imwrite('salidas/oso_niños_import.png', res3_import)
+        cv2.imwrite('salidas/oso_niños_mixing.png', res3_mixing)
+    else:
+        print("Posición destino no válida: el objeto se sale de la imagen")
+
+# pegarAvionEnMontania()
+pegarOsoNiñosPlaya()
