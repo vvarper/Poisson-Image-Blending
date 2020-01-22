@@ -110,10 +110,10 @@ def cargaConjuntoImagenes():
         mascaras.append(mascara)
 
     for img in sorted(listdir("imagenes/sources")):
-        fuentes.append(cargarImagen("imagenes/source/" + img, 1))
+        fuentes.append(cargarImagen("imagenes/sources/" + img, 1))
 
     for img in sorted(listdir("imagenes/targets")):
-        destinos.append(cargarImagen("imagenes/target/" + img, 1))
+        destinos.append(cargarImagen("imagenes/targets/" + img, 1))
 
     return fuentes, mascaras, destinos
 
@@ -271,6 +271,8 @@ def poisson_blending(mascara, fuente, destino):
 
     # Lista con los índices píxeles máscara
     omega = getPosicionesMascara(mascara)
+
+    print(f"Número de píxeles a modificar: {len(omega)}")
 
     # 1. Calcular matriz de coeficientes para omega
     print("\nCalculando A")
