@@ -447,6 +447,72 @@ def pegarGrafitiPared():
     else:
         print("Posición destino no válida: el objeto se sale de la imagen")
 
+def pegarPinguinoParque():
+    objeto = getObjeto("mask_pinguino.jpg")
+    fuente = cargarImagen("imagenes/sources/pinguino.jpg", 1)
+    destino = cargarImagen("imagenes/targets/parque.jpg", 1)
+
+    pos_dest = [0.8, 0.15]
+    despl, despl_valido = calcularDesplazamiento(pos_dest, objeto, destino)
+
+    if (despl_valido):
+        res_paste = pegarObjeto(objeto, fuente, destino, despl)
+        mostrarImagen(res_paste)
+
+        res_import, res_mixing = poissonBlending(
+            objeto, fuente, destino, despl)
+
+        mostrarVariasImagenes([res_paste, res_import, res_mixing])
+        cv2.imwrite('salidas/parque_pinguino_paste.png', res_paste)
+        cv2.imwrite('salidas/parque_pinguino_import.png', res_import)
+        cv2.imwrite('salidas/parque_pinguino_mixing.png', res_mixing)
+    else:
+        print("Posición destino no válida: el objeto se sale de la imagen")
+
+def pegarPinguinoPlaya():
+    objeto = getObjeto("mask_pinguino.jpg")
+    fuente = cargarImagen("imagenes/sources/pinguino.jpg", 1)
+    destino = cargarImagen("imagenes/targets/playa_atardecer.jpg", 1)
+
+    pos_dest = [0.8, 0.7]
+    despl, despl_valido = calcularDesplazamiento(pos_dest, objeto, destino)
+
+    if (despl_valido):
+        res_paste = pegarObjeto(objeto, fuente, destino, despl)
+        mostrarImagen(res_paste)
+
+        res_import, res_mixing = poissonBlending(
+            objeto, fuente, destino, despl)
+
+        mostrarVariasImagenes([res_paste, res_import, res_mixing])
+        cv2.imwrite('salidas/playa_pinguino_paste.png', res_paste)
+        cv2.imwrite('salidas/playa_pinguino_import.png', res_import)
+        cv2.imwrite('salidas/playa_pinguino_mixing.png', res_mixing)
+    else:
+        print("Posición destino no válida: el objeto se sale de la imagen")
+
+def pegarTazaCocina():
+    objeto = getObjeto("mask_taza.jpg")
+    fuente = cargarImagen("imagenes/sources/taza.jpg", 1)
+    destino = cargarImagen("imagenes/targets/cocina.jpg", 1)
+
+    pos_dest = [282, 256]
+    despl, despl_valido = calcularDesplazamiento(pos_dest, objeto, destino)
+
+    if (despl_valido):
+        res_paste = pegarObjeto(objeto, fuente, destino, despl)
+        mostrarImagen(res_paste)
+
+        res_import, res_mixing = poissonBlending(
+            objeto, fuente, destino, despl)
+
+        mostrarVariasImagenes([res_paste, res_import, res_mixing])
+        cv2.imwrite('salidas/taza_cocina_paste.png', res_paste)
+        cv2.imwrite('salidas/taza_cocina_import.png', res_import)
+        cv2.imwrite('salidas/taza_cocina_mixing.png', res_mixing)
+    else:
+        print("Posición destino no válida: el objeto se sale de la imagen") 
+
 
 def pegarOsoNiñosPlaya():
     mask_niño = getObjeto("mask_niño.jpg")
@@ -527,4 +593,7 @@ def pegarLunaPlaya():
 # pegarGradienteMuro()
 # pegarAvionEnMontaña()
 # pegarOsoNiñosPlaya()
-pegarLunaPlaya()
+# pegarLunaPlaya()
+# pegarPinguinoParque()
+# pegarTazaCocina()
+pegarPinguinoParque()
