@@ -561,14 +561,14 @@ def pegarOsoNiñosPlaya():
 
 def pegarLunaPlaya():
     mask_luna = getObjeto("mask_luna.jpg")
-    mask_brillo = getObjeto("mask_luna_brillo.jpg")
+    mask_brillo = getObjeto("mask_luna_brillo2.jpg")
     source = cargarImagen("imagenes/sources/luna.jpg", 1)
-    destino = cargarImagen("imagenes/targets/playa.jpg", 1)
+    destino = cargarImagen("imagenes/targets/playa2.jpg", 1)
 
-    pos_luna = [0.15,0.75]
+    pos_luna = [0.15,0.3]
     despl_luna, despl_valido1 = calcularDesplazamiento(pos_luna, mask_luna, destino)
 
-    pos_brillo = [0.75, 0.75]
+    pos_brillo = [0.42, 0.33]
     despl_brillo, despl_valido2 = calcularDesplazamiento(pos_brillo, mask_brillo, destino)
 
     if despl_valido1 and despl_valido2:
