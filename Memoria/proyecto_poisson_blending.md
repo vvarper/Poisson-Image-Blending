@@ -527,6 +527,8 @@ A continuación volvemos a usar un ejemplo que estaba presente en el paper, en e
 	\end{subfigure}
 \end{figure}
 
-Una vez más, el resultado concuerda con el mostrado en el paper. En esta ocasión, Importing y Mixing
+Una vez más, el resultado concuerda con el mostrado en el paper. En esta ocasión, Importing y Mixing obtienen resultados similares, aunque tienen sus pros y contras: mientras que importing da peores bordes, mixing provoca la aparición de texturas del fondo del destino en el objeto (por ejemplo, la cara del niño tiene las texturas de las olas). Aún con todo, ambas soluciones son buenas, siendo necesario fijarse en la imagen para detectar las anomalías. 
+
+<!-- -->
 
 # Referencias
