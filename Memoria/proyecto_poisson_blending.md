@@ -14,6 +14,9 @@ listings-disable-line-numbers: true
 logo: img/logoUGR.jpg
 logo-width: 175
 numbersections: true
+header-includes:
+    - \usepackage{graphicx}
+    - \usepackage{subcaption}
 ---
 
 # Introducción {#intro}
@@ -281,7 +284,7 @@ para obtener las posiciones del objeto y el desplazamiento en el destino.
 Para obtener estas posiciones, se requiere el uso de una imagen en blanco y negro (máscara)
 con las mismas dimensiones que la imagen fuente, de forma que el color blanco representa 
 al objeto seleccionado. Estas máscaras deben crearse de forma externa, y en nuestro caso 
-las hemos creado con el programa de edición de imágenes GIMP, que es un software libre. 
+las hemos creado con el programa de edición de imágenes GIMP, que es de software libre. 
 
 Por lo tanto, una vez se dispone de dicha imagen máscara, se puede pasar su ruta como 
 parámetro a la función **getObjeto(nombre_mascara)**, que devuelve una lista con las 
@@ -337,6 +340,136 @@ def calcularDesplazamiento(pos_dest, objeto, destino):
 
 Tal y como se puede observar, tras interpretar la posición destino dada apropiadamente, en esta función se calcula el centro de la máscara obteniendo la media de sus extremos (max_y-min_y/2, max_x+min_x/2). Posteriormente, se calcula el desplazamiento como la diferencia entre la posición destino y este centro, y se comprueba si es válida.
 
-# Resultados 
+Un detalle a señalar a la hora de mostrar los resultados del pegado de imágenes es que, aunque los valores deben convertirse a entero, no se deben normalizar, pues eso podría alterar el valor de los píxeles fuera del área de pegado (así como los de dentro), lo cual no es deseable, pues alteraría el resultado. Por este motivo, las funciones auxiliares mostrarImagen y mostrarVariasImagenes (implementadas en las prácticas iniciales) tiene el parámetro de normalización desactivado por defecto.
+
+# Ejecución y Resultados 
+
+Con el fin de comprobar el funcionamiento de esta técnica, es el momento de utilizarla con diferentes imágenes ejemplo. Para ello, hemos buscado diferentes imágenes (unas como fuente y otras como destino), y hemos creado las máscara de las imágenes fuente. El objetivo es aplicar la técnica de Poisson Blending (con Importin Gradients y Mixing Gradients) y el solapado directo, para poder ver una comparativa. La posición concreta en la que se va pegar cada objeto la hemos obtenido experimentalmente, tratando de colocarlos en lugares que tengan sentido (como una taza de café encima de una mesa). 
+
+En primer lugar veamos un ejemplo que está también presente en el paper: un avión como imagen fuente y un paisaje en una montaña como destino. 
+
+\begin{figure}[H]
+	\begin{subfigure}[b]{0.49\textwidth}
+		\includegraphics[]{img/sources/avion.jpg}
+		\caption{Imagen fuente}
+		\label{fig:grado}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.49\textwidth}
+		\includegraphics[]{img/masks/mask_avion.jpg}
+		\caption{Máscara}
+		\label{fig:intermediacion}
+	\end{subfigure}
+\end{figure}
+
+\begin{figure}[H]
+	\begin{subfigure}[b]{0.49\textwidth}
+		\includegraphics[]{img/targets/montania.jpg}
+		\caption{Imagen destino}
+		\label{fig:grado}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.49\textwidth}
+		\includegraphics[]{img/salidas/avion_montania_paste.png}
+		\caption{Pegado directo}
+		\label{fig:intermediacion}
+	\end{subfigure}
+    \begin{subfigure}[b]{0.49\textwidth}
+		\includegraphics[]{img/salidas/avion_montania_import.png}
+		\caption{Poisson Blending Importing Gradients}
+		\label{fig:grado}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.49\textwidth}
+		\includegraphics[]{img/salidas/avion_montania_mixing.png}
+		\caption{Poisson Blending Mixing Gradients}
+		\label{fig:intermediacion}
+	\end{subfigure}
+\end{figure}
+
+Como se puede ver, pese a que la máscara no delimita al avión de forma precisa (hay cierto borde alrededor), 
+la técnica Poisson Blending logra realizar un pegado de calidad. Si nos fijamos bien en el resultado con Importint Gradients, se puede ver un poco de ese borde (bruma blanca), mientras que en el método Mixing Gradients ha sido completamente removido este borde. Por contra, en la parte trasera inferior del avión podemos ver que ha aparecido la textura de la montaña de fondo, algo que no ocurre en Importing Gradients, pues en su interior solo se computan los gradientes del propio avión. En cualquier caso, los resultados son favorables, y de hecho coinciden con los mostrados en el paper de referencia, lo que es buen indicativo de que la implementación es correcta. 
+
+Veamos ahora un caso más difícil que también esta en el paper citado: 
+
+\begin{figure}[H]
+	\begin{subfigure}[b]{0.49\textwidth}
+		\includegraphics[width=0.49\textwidth]{img/sources/grad.png}
+		\caption{Imagen fuente}
+		\label{fig:grado}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.49\textwidth}
+		\includegraphics[width=0.49\textwidth]{img/masks/mask_grad.png}
+		\caption{Máscara}
+		\label{fig:intermediacion}
+	\end{subfigure}
+	\begin{subfigure}[b]{0.49\textwidth}
+		\includegraphics[width=0.49\textwidth]{img/targets/muro.png}
+		\caption{Imagen destino}
+		\label{fig:grado}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.49\textwidth}
+		\includegraphics[width=0.49\textwidth]{img/salidas/grado_muro_paste.png}
+		\caption{Pegado directo}
+		\label{fig:intermediacion}
+	\end{subfigure}
+    \begin{subfigure}[b]{0.49\textwidth}
+		\includegraphics[width=0.49\textwidth]{img/salidas/grado_muro_import.png}
+		\caption{Poisson Blending Importing Gradients}
+		\label{fig:grado}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.49\textwidth}
+		\includegraphics[width=0.49\textwidth]{img/salidas/grado_muro_mixing.png}
+		\caption{Poisson Blending Mixing Gradients}
+		\label{fig:intermediacion}
+	\end{subfigure}
+\end{figure}
+
+En esta ocasión, el método Mixing Gradients sí ha podido demostrar su ventaja de forma clara: mientras que con importing gradients se obtiene un fondo liso (el del papel) pero anaranjado (muro), con mixing, al considerar los gradientes de la imagen destino en el interior de omega, consigue pegar objetos con agujeros conservando el fondo de la imagen destino en estos. De esta forma, imágenes con escrituras pueden ser pegadas en diversas superficies con resultados realistas.
+
+A continuación mostramos un ejemplo similar, esta vez pegando un grafiti en una pared.
+
+\begin{figure}[H]
+	\begin{subfigure}[b]{0.49\textwidth}
+		\includegraphics[width=0.80\textwidth]{img/sources/grafiti.jpg}
+		\caption{Imagen fuente}
+		\label{fig:grado}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.49\textwidth}
+		\includegraphics[width=0.80\textwidth]{img/masks/mask_grafiti.jpg}
+		\caption{Máscara}
+		\label{fig:intermediacion}
+	\end{subfigure}
+	\begin{subfigure}[b]{0.49\textwidth}
+		\includegraphics[width=0.80\textwidth]{img/targets/pared.jpg}
+		\caption{Imagen destino}
+		\label{fig:grado}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.49\textwidth}
+		\includegraphics[width=0.80\textwidth]{img/salidas/grafiti_pared_paste.png}
+		\caption{Pegado directo}
+		\label{fig:intermediacion}
+	\end{subfigure}
+    \begin{subfigure}[b]{0.49\textwidth}
+		\includegraphics[width=0.80\textwidth]{img/salidas/grafiti_pared_import.png}
+		\caption{Poisson Blending Importing Gradients}
+		\label{fig:grado}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.49\textwidth}
+		\includegraphics[width=0.80\textwidth]{img/salidas/grafiti_pared_mixing.png}
+		\caption{Poisson Blending Mixing Gradients}
+		\label{fig:intermediacion}
+	\end{subfigure}
+\end{figure}
+
+Tal y como pasaba en el ejemplo anterior, el método Mixing Gradients logra una solución claramente mejor.
+
+A continuación volvemos a usar un ejemplo que estaba presente en el paper, en el que se pega un oso y unos niños 
 
 # Referencias

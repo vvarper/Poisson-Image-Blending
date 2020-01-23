@@ -545,6 +545,12 @@ def pegarMeteoritoCiudad():
 # # Pegar Pingüino en Parque
 # pegarUnObjeto("pinguino.jpg", "mask_pinguino.jpg", "parque.jpg", [0.8, 0.15])
 
+# # Pegar Taza en Cocina
+# pegarUnObjeto("taza.jpg", "mask_taza.jpg", "cocina.jpg", [282, 256])
+
+# # Pegar Meteorito en Ciudad
+# pegarUnObjeto("meteorito.jpg", "mask_meteorito.jpg", "ciudad.jpg", [0.15, 0.2])
+
 # # Pegar Pingüino2 en Parque
 # pegarUnObjeto("pinguino2.jpg", "mask_pinguino2.jpg", "parque.jpg", [0.77, 0.15])
 
@@ -553,12 +559,6 @@ def pegarMeteoritoCiudad():
 
 # # Pegar Pingüino2 en Playa
 # pegarUnObjeto("pinguino2.jpg", "mask_pinguino2.jpg", "playa_atardecer.jpg", [0.8, 0.7])
-
-# # Pegar Taza en Cocina
-# pegarUnObjeto("taza.jpg", "mask_taza.jpg", "cocina.jpg", [282, 256])
-
-# # Pegar Meteorito en Ciudad
-# pegarUnObjeto("meteorito.jpg", "mask_meteorito.jpg", "ciudad.jpg", [0.15, 0.2])
 
 # # Pegar oso y niños en el agua
 # pegarOsoNiñosPlaya()
