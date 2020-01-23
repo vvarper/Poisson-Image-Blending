@@ -32,7 +32,7 @@ Para presentar esta técnica, consideremos los siguientes elementos:
 
 - S: dominio de la imagen (subconjunto cerrado de $\mathbb{R}^{2}$)
 
-- $\Omega$: subconjunto cerrado de S con frontera $\partial \Omega$ (zona de pegado en la imagen destino). Para nuestro caso concreto (imágenes) podemos definir $\partial \Omega$ como todos los píxeles de S que tienen algún vecino (uno de los cuatro píxeles adyacentes) en $\Omega$ (sin estar contenido en este). 
+- $\Omega$: subconjunto cerrado de S con frontera $\partial \Omega$ (zona de pegado en la imagen destino). Para nuestro caso concreto (imágenes) podemos definir $\partial \Omega$ como todos los píxeles de S fuera de $\Omega$ que tienen algún vecino (uno de los cuatro píxeles adyacentes) en $\Omega$. 
 
 - f*: función escalar definida en S menos el interior de $\Omega$, que representa los valores 
       de la imagen destino fuera del área de pegado.
@@ -59,11 +59,11 @@ $$
 
 Esta ecuación es fundamental, pues su solución para f contendrá los valores finales de los píxeles en la zona de pegado. Por consiguiente, la implementación del algoritmo consistirá en calcular la divergencia de v, y posteriormente obtener f como la solución de Af=b, donde:
 
-- b es un vector columna con tantos valores n como píxeles en $\Omega$ (junto a $\partial \Omega$).
+- b es dicha divergencia (considerando las condiciones de frontera), en forma de un vector columna con tantos valores n como píxeles en $\Omega$. Así, dado un píxel p en $\Omega$, y cada uno de sus vecinos q, su valor en b corresponde a la suma de sus $v_{pq}$ (depende del campo guía v elegido) y del valor en f* de sus vecinos que se encuentren en $\partial \Omega$.
 
 - f es otro vector columna del mismo tamaño (píxeles de la solución).
 
-- A es el operador laplaciano, es decir, una matriz dispersa nxn con 4's (en la diagonal) y -1's, tal que al multiplicarla por un vector columna, calcula otro vector columna con la laplaciana de cada valor del primero: dado un píxel, su laplaciana es la suma de sus gradientes, o dicho de otra forma, la suma de las diferencias con sus cuatro vecinos (dado $x_{i,j}$, su laplaciana sería $4*x_{i,j} - x_{i-1,j} - x_{i+1,j} - x_{i,j-1} - x_{i,j+1}$)
+- A es el operador laplaciano, esto es, una matriz dispersa nxn con 4's (en la diagonal) y -1's, tal que al multiplicarla por un vector columna, calcula otro vector columna con la laplaciana de cada valor del primero. Dado un píxel, su laplaciana es la suma de sus gradientes, o dicho de otra forma, la suma de las diferencias con sus cuatro vecinos (dado $x_{i,j}$, su laplaciana sería $4*x_{i,j} - x_{i-1,j} - x_{i+1,j} - x_{i,j-1} - x_{i,j+1}$)
 
 
 Esta implementación se verá en detalle en la sección 3.
@@ -75,6 +75,8 @@ Para pegar un objeto de una imagen en otra, la elección básica para el campo v
 $$
 \Delta f=\Delta g \text { over } \Omega, \text { con }\left.f\right|_{\partial \Omega}=f^{*} |_{\partial \Omega}
 $$
+
+De cara a su implementación, en este caso $v_{pq}=g_p - g_q$, donde g indica el valor del píxel correspondiente en la imagen fuente.
 
 \pagebreak
 
@@ -89,7 +91,178 @@ $$
 \end{array}\right.
 $$
 
+Por consiguiente, en este caso el cálculo de la divergencia de v se hará teniendo en cuenta que para cada vecino q de un píxel p en $\Omega$:
+$$
+v_{p q}=\left\{\begin{array}{ll}
+{f_{p}^{*}-f_{q}^{*}} & {\text { si }\left|f_{p}^{*}-f_{q}^{*}\right|>\left|g_{p}-g_{q}\right|} \\
+{g_{p}-g_{q}} & {\text { en otro caso }}
+\end{array}\right.
+$$
+
 # Implementación 
+
+## Función Principal: poissonBlending
+
+La implementación de esta herramienta se encuentra en el archivo **poisson_blending.py**. En ella, la función principal es **poissonBlending(objeto, fuente, destino, despl)**, que se encargar de realizar el pegado de un objeto de una imagen en otra mediante la técnica poisson blending. Concretamente, devolverá dos resultados: un usando importing gradients y otro con mixing gradients. Sus parámetros son:
+
+- objeto: posiciones en la fuente de la objeto a pegar.
+- fuente: imagen en color (3 canales) que contiene el objeto que se va a pegar en el destino.
+- destino: imagen en color (3 canales) en la que se va a pegar el objeto. 
+- despl: pareja de enteros que indica el desplazamiento que hay que realizar de las posiciones del objeto, para transformar sus coordenadas en las deseadas para la imagen destino.
+
+Aunque no es necesario que fuente y destino coincidan en dimensiones, sí que es preciso que el objeto quepa dentro de la imagen destino, y que el desplazamiento indicado no permita que el objeto se salga por algún extremo de la imagen destino.
+
+El objeto de este algoritmo es resolver la ecuación Af=b (comentada en la sección anterior) para obtener f como los valores finales del objeto al pegarlo en la imagen destino. Para ello, en primer lugar se obtiene la matriz de Poisson A acorde a los píxeles del objeto. A continuación, de forma independiente en cada canal de la imagen, se obtiene el vector columna b (divergencia de v) tanto para importing_gradients como mixing_gradientes, y se resuelve así la ecuación Af=b con la ayuda de la biblioteca scipy, que implementa el método del gradiente conjugado (método iterativo) en linalg.cg(A,b). El motivo por el que se usa este método es que Af=b (ecuación en derivadas parciales) es un sistema disperso demasiado grande para ser tratado por un método directo.
+
+Finalmente, cada solución es igual a la imagen destino con los píxeles correspondientes a omega (posiciones del objeto + desplazamiento) modificados al valor obtenido en f. Como se tratan de imágenes, estos valores han de ser truncados entre 0 y 255 (los negativos pasan a 0, y los valores mayores que 255 a este número), y serán transformados en enteros cuando se realice la visualización.
+
+El código de esta función es el siguiente:
+
+~~~python
+def poissonBlending(objeto, fuente, destino, despl):
+
+    # Cada solución (import_gradients y mixing_gradients)
+    # se inicializa con los valores de la imagen destino
+    solucion_import = np.copy(destino)
+    solucion_mix = np.copy(destino)
+    # 1. Calcular matriz de coeficientes para omega
+    A = matrizPoisson(objeto)
+    # Para cada canal
+    for canal in range(destino.shape[2]):
+        # 2.1 Calcular vector columna b para importing y mixing
+        b_import, b_mix = calcularDivGuia(
+            objeto, fuente[:, :, canal], destino[:, :, canal], despl)
+
+        # 2.2 Resolver A*f_omega=b
+        f_omega_import, _ = linalg.cg(A, b_import)
+        f_omega_mix, _ = linalg.cg(A, b_mix)
+
+        # 2.3 Incorporar f_omega a f
+        for i, posicion in enumerate(objeto):
+            solucion_import[posicion[0]+despl[0], posicion[1]+despl[1],
+                            canal] = f_omega_import[i]
+            solucion_mix[posicion[0]+despl[0], posicion[1] +
+                         despl[1], canal] = f_omega_mix[i]
+
+    # Devolver todas las soluciones, con valores entre 0 y 255
+    return np.clip(solucion_import, 0, 255), np.clip(solucion_mix, 0, 255)
+~~~
+
+Como se puede ver, se hace uso de dos funciones auxiliares: **matrizPoisson** para obtener la matriz A, y **calcularDivGuia** para obtener el vector b. 
+
+## Cálculo de la matriz de Poisson A
+
+Tal y como se introdujo en la sección 2, la matriz de A es una matriz cuadrada dispersa con tantas filas como píxeles en omega. De esta forma, su función es calcular la Laplaciana de cada uno de los elementos de un vector columna con el mismo número de elementos que filas tiene A. 
+
+Su cáculo se hace a partir de las posiciones del objeto a pegar, asignando para elemento (fila) un 4 en la diagonal y un -1 en la columna correspondiente a cada uno de sus vecinos dentro de omega (como máximo serán 4). La implementación sigue lo descrito:
+
+~~~Python
+def matrizPoisson(omega):
+    # Calculamos el número de píxeles de omega
+    N = len(omega)
+    # Matriz dispersa de NxN
+    A = sparse.lil_matrix((N, N))
+
+    # Para cada píxel/posición
+    for i, posicion in enumerate(omega):
+        progress_bar(i, N-1)  # OJO
+        A[i, i] = 4 # 4 en la diagonal (píxel actual)
+
+        # -1 en las columnas de los vecinos en omega
+        for vecino in getVecindario(posicion):
+            if vecino in omega:
+                j = omega.index(vecino)
+                A[i, j] = -1
+
+    return A
+~~~
+
+La función getVecindario(posicion) es sencilla: devuelve los índices correspondientes a los 4 vecinos de una posición dada: (i+1,j), (i-1,j), (i,j+1), (i,j-1)
+
+\pagebreak
+
+## Cálculo del vector b: divergencia del campo guía v con criterios de contorno
+
+El vector b consta de tantos elementos como píxeles hay en omega, calculando para píxel la suma de los valores en la imagen destino de aquellos vecinos que estén fuera de omega (frontera), junto a la divergencia del campo guía v en dicha posición. Esta divergencia depende del método usado, devolviéndose en esta función el resultado tanto para Importing Gradients como para Mixing Gradients, para así poder comparar ambos fácilmente. La función se define como sigue:
+
+~~~Python 
+def calcularDivGuia(omega, fuente, destino, despl):
+    N = len(omega)
+    b_import = np.zeros(N)
+    b_mix = np.zeros(N)
+
+    # Para cada píxel en omega
+    for i in range(N):
+        # Condición contorno (común a ambos métodos)
+        valorBorde = calcularValorBorde(omega, omega[i], destino, despl)
+        # Diverguencia de v + valorBorde
+        b_import[i] = getLaplaciana(fuente, omega[i]) + valorBorde
+        b_mix[i] = getLaplacianaMix(
+            fuente, destino, omega[i], despl) + valorBorde
+
+    return b_import, b_mix
+~~~ 
+
+Como se dijo previamente, el valor del borde se obtiene sumando el valor en la imagen destino de los vecinos fuera de omega. Por lo tanto, este valor será 0 para todos los píxeles en el interior de la máscara (que no se encuentra en colindan con la frontera).
+
+~~~Python
+def calcularValorBorde(omega, posicion, destino, despl):
+    valorBorde = 0
+    if (esBorde(omega, posicion)):
+        for vecino in getVecindario(posicion):
+            if not vecino in omega:
+                if dentroImagen(destino, vecino + despl):
+                    valorBorde += destino[tuple(vecino + despl)]
+                else:
+                    valorBorde += destino[tuple(posicion + despl)]
+
+    return valorBorde
+~~~
+
+La función esBorde simplemente comprueba si el píxel tiene algún vecino fuera de omega (pues, de ser así, valoBorde será 0). Por su parte, dentroImagen comprueba si una posición está dentro de la imagen, esto es: sus valores son mayores o igual que 0 y menores que sus dimensiones. 
+
+Un caso peculiar a tener en cuenta es el que se da cuando alguna posición de omega se encuentra en el borde de la imagen destino, y por lo tanto tiene un vecino (o dos) que no está ni en omega ni en los valores definidos fuera de este. Este caso no es baladí, pues de no tratarse, se estaría asumiendo que la condición de frontera en ese píxel es 0, lo que ensombrecería a partir de esa zona. Por este motivo, hemos decidido seguir una política de bordes de copia del último valor: el valor de un píxel exterior a la imagen es igual al valor en el píxel límite de la misma. De esta forma, si un vecino de un píxel p en omega se sale de la imagen, tomará el valor de la imagen destino en p.
+
+Respecto al cálculo de la diverguencia de v, en el caso de Importing Gradients se realiza sumando las diferencias de los valores (en la imagen fuente) con sus vecinos que se encuentra en omega (es decir, calculando la laplaciana).
+
+~~~Python 
+def getLaplaciana(fuente, posicion):
+    laplaciana = 0
+    for vecino in getVecindario(posicion):
+        if dentroImagen(fuente, vecino):
+            laplaciana += fuente[posicion] - fuente[vecino]
+
+    return laplaciana
+~~~
+
+En el caso de Mixing Gradients, se consideran también los gradientes en la imagen destino, comparando ambos y eligiendo en cada caso el de mayor intensidad (valor absoluto). Casos especiales a tener en cuenta se dan cuando el vecino de un elemento de omega se sale de la imagen fuente o destino. En esos casos, como usamos política de bordes de copia, el gradiente correspondiente es 0 (la resta es entre valores iguales), por lo que se utiliza directamente el gradiente en la otra imagen (si esta sí que contiene al vecino). La implementación es la siguiente:
+
+~~~Python 
+def getLaplacianaMix(fuente, destino, posicion, despl):
+    laplaciana = 0
+    for vecino in getVecindario(posicion):
+        # Caso general: calcular y comparar gradientes en las dos imágenes
+        if dentroImagen(destino, vecino+despl) and dentroImagen(fuente, vecino):
+            grad_fuente = fuente[posicion] - fuente[vecino]
+            grad_destino = destino[tuple(
+                posicion+despl)] - destino[tuple(vecino+despl)]
+            if abs(grad_fuente) > abs(grad_destino):
+                laplaciana += grad_fuente
+            else:
+                laplaciana += grad_destino
+        # Si una de las imágenes no contiene al correspondiente vecino:
+        # -> política de bordes de copia: gradiente intensidad 0. Se usa directamente 
+        # el gradiente de la otra
+        elif dentroImagen(destino, vecino+despl):
+            grad_destino = destino[tuple(
+                posicion+despl)] - destino[tuple(vecino+despl)]
+            laplaciana += grad_destino
+        elif dentroImagen(fuente, vecino):
+            grad_fuente = fuente[posicion] - fuente[vecino]
+            laplaciana += grad_fuente
+
+    return laplaciana
+~~~
 
 # Resultados 
 

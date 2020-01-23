@@ -188,16 +188,18 @@ def getVecindario(pos):
 # un omega dado
 
 
-def matriz_poisson(omega):
-    # Calculamos el número de píxeles de omega (máscara)
+def matrizPoisson(omega):
+    # Calculamos el número de píxeles de omega
     N = len(omega)
     # Matriz dispersa de NxN
     A = sparse.lil_matrix((N, N))
 
+    # Para cada píxel/posición
     for i, posicion in enumerate(omega):
         progress_bar(i, N-1)  # OJO
-        A[i, i] = 4
+        A[i, i] = 4  # 4 en la diagonal (píxel actual)
 
+        # -1 en las columnas de los vecinos en omega
         for vecino in getVecindario(posicion):
             if vecino in omega:
                 j = omega.index(vecino)
@@ -259,6 +261,7 @@ def getLaplaciana(fuente, posicion):
 def getLaplacianaMix(fuente, destino, posicion, despl):
     laplaciana = 0
     for vecino in getVecindario(posicion):
+        # Caso general: calcular y comparar gradientes en las dos imágenes
         if dentroImagen(destino, vecino+despl) and dentroImagen(fuente, vecino):
             grad_fuente = fuente[posicion] - fuente[vecino]
             grad_destino = destino[tuple(
@@ -267,6 +270,9 @@ def getLaplacianaMix(fuente, destino, posicion, despl):
                 laplaciana += grad_fuente
             else:
                 laplaciana += grad_destino
+        # Si una de las imágenes no contiene al correspondiente vecino:
+        # -> política de bordes de copia: gradiente intensidad 0. Se usa directamente
+        # el gradiente de la otra
         elif dentroImagen(destino, vecino+despl):
             grad_destino = destino[tuple(
                 posicion+despl)] - destino[tuple(vecino+despl)]
@@ -287,9 +293,12 @@ def calcularDivGuia(omega, fuente, destino, despl):
     b_import = np.zeros(N)
     b_mix = np.zeros(N)
 
+    # Para cada píxel en omega
     for i in range(N):
         progress_bar(i, len(omega)-1)  # OJO
+        # Condición contorno (común a ambos métodos)
         valorBorde = calcularValorBorde(omega, omega[i], destino, despl)
+        # Diverguencia de v + valorBorde
         b_import[i] = getLaplaciana(fuente, omega[i]) + valorBorde
         b_mix[i] = getLaplacianaMix(
             fuente, destino, omega[i], despl) + valorBorde
@@ -314,31 +323,25 @@ def progress_bar(n, N):
     print("\r{}:{:3.0f}[%]".format(bar, percent), end="", flush=True)
 
 
-# Devuelve tres imágenes (copia/pega en imágenes según criterios distintos):
-#   -> Pegado directo, Poisson Blending con Importing Gradients y
-#       Poisson Blending con Mixing Gradients
-# mascara, fuente y destino son 3 imágenes del mismo tamaño (fil*col).
-# mascara es en blanco y negro (0/255)
-# fuente y destino son en color (3 canales)
+# Devuelve dos imágenes (copia/pega en imágenes según criterios distintos):
+#   -> Poisson Blending con Importing Gradients y con Mixing Gradients
+# objeto es una lista de índices de la imagen fuente
+# fuente y destino son imágenes color (3 canales)
+# despl es una pareja de enteros que indica el desplazamiento de cada
+# píxel del objeto en la fuente respecto a su posición final en el destino
 
-def poisson_blending(omega, fuente, destino, despl):
-    # Queremos obtener f tal que lapl(f) = div(v) = lapl(fuente) dentro de la máscara,
-    # y f(borde) = destino(borde), donde borde es el borde de la máscara (está dentro)
-    # f fuera de la máscara tendrá los valores de destino
+def poissonBlending(objeto, fuente, destino, despl):
 
-    # Cada solución (solapado, import_gradients y mixing_gradients)
+    # Cada solución (import_gradients y mixing_gradients)
     # se inicializa con los valores de la imagen destino
     solucion_import = np.copy(destino)
     solucion_mix = np.copy(destino)
 
-    # Lista con los índices píxeles máscara
-    #omega = getPosicionesMascara(mascara)
-
-    print(f"Número de píxeles a modificar: {len(omega)}")
+    print(f"Número de píxeles a modificar: {len(objeto)}")
 
     # 1. Calcular matriz de coeficientes para omega
     print("\nCalculando A")
-    A = matriz_poisson(omega)
+    A = matrizPoisson(objeto)
 
     # Para cada canal
     for canal in range(destino.shape[2]):
@@ -349,7 +352,7 @@ def poisson_blending(omega, fuente, destino, despl):
 
         print("Calculando b para importing gradients y para mixing gradients")
         b_import, b_mix = calcularDivGuia(
-            omega, fuente[:, :, canal], destino[:, :, canal], despl)
+            objeto, fuente[:, :, canal], destino[:, :, canal], despl)
 
         # 2.2 Resolver A*f_omega=b
 
@@ -364,13 +367,13 @@ def poisson_blending(omega, fuente, destino, despl):
         print(
             f"Añadiendo los valores calculados al canal {canal} correspondiente en cada solución")
 
-        for i, posicion in enumerate(omega):
+        for i, posicion in enumerate(objeto):
             solucion_import[posicion[0]+despl[0], posicion[1]+despl[1],
                             canal] = f_omega_import[i]
             solucion_mix[posicion[0]+despl[0], posicion[1] +
                          despl[1], canal] = f_omega_mix[i]
 
-    # Devolver todas las soluciones, con valores entre 0 y 1
+    # Devolver todas las soluciones, con valores entre 0 y 255
     return np.clip(solucion_import, 0, 255), np.clip(solucion_mix, 0, 255)
 
 ################################################################################
@@ -390,11 +393,12 @@ def pegarAvionEnMontania():
         res_cloning = pegarObjeto(objeto, fuente, destino, despl)
         mostrarImagen(res_cloning)
 
-        res_import, res_mixing = poisson_blending(
+        res_import, res_mixing = poissonBlending(
             objeto, fuente, destino, despl)
         mostrarVariasImagenes([res_cloning, res_import, res_mixing])
     else:
         print("Posición destino no válida: el objeto se sale de la imagen")
+
 
 def pegarOsoNiñosPlaya():
     mask_niño = getObjeto("mask_niño.jpg")
@@ -405,13 +409,16 @@ def pegarOsoNiñosPlaya():
     destino = cargarImagen("imagenes/targets/perez_water.jpg", 1)
 
     pos_dest_oso = [0.25, 0.5]
-    despl_oso, despl_valido1 = calcularDesplazamiento(pos_dest_oso, mask_oso, destino)
+    despl_oso, despl_valido1 = calcularDesplazamiento(
+        pos_dest_oso, mask_oso, destino)
 
     pos_niño = [0.75, 0.65]
-    despl_niño, despl_valido2 = calcularDesplazamiento(pos_niño, mask_niño, destino)
+    despl_niño, despl_valido2 = calcularDesplazamiento(
+        pos_niño, mask_niño, destino)
 
     pos_niña = [0.75, 0.45]
-    despl_niña, despl_valido3 = calcularDesplazamiento(pos_niña, mask_niña, destino)
+    despl_niña, despl_valido3 = calcularDesplazamiento(
+        pos_niña, mask_niña, destino)
 
     if despl_valido1 and despl_valido2 and despl_valido3:
         res_paste = pegarObjeto(mask_oso, oso, destino, despl_oso)
@@ -419,18 +426,25 @@ def pegarOsoNiñosPlaya():
         res_paste = pegarObjeto(mask_niña, niños, res_paste, despl_niña)
         mostrarImagen(res_paste)
 
-        res1_import, res1_mixing = poisson_blending(mask_oso, oso, destino, despl_oso)
-        res2_import, _ = poisson_blending(mask_niño, niños, res1_import, despl_niño)
-        _, res2_mixing = poisson_blending(mask_niño, niños, res1_mixing, despl_niño)
-        _, res3_mixing = poisson_blending(mask_niña, niños, res2_mixing, despl_niña)
-        res3_import, _ = poisson_blending(mask_niña, niños, res2_import, despl_niña)
+        res1_import, res1_mixing = poissonBlending(
+            mask_oso, oso, destino, despl_oso)
+        res2_import, _ = poissonBlending(
+            mask_niño, niños, res1_import, despl_niño)
+        _, res2_mixing = poissonBlending(
+            mask_niño, niños, res1_mixing, despl_niño)
+        _, res3_mixing = poissonBlending(
+            mask_niña, niños, res2_mixing, despl_niña)
+        res3_import, _ = poissonBlending(
+            mask_niña, niños, res2_import, despl_niña)
 
-        mostrarVariasImagenes([res_paste, res3_import, res3_mixing], norm=False)
-        cv2.imwrite('salidas/oso_niños_paste.png',res_paste)
+        mostrarVariasImagenes(
+            [res_paste, res3_import, res3_mixing], norm=False)
+        cv2.imwrite('salidas/oso_niños_paste.png', res_paste)
         cv2.imwrite('salidas/oso_niños_import.png', res3_import)
         cv2.imwrite('salidas/oso_niños_mixing.png', res3_mixing)
     else:
         print("Posición destino no válida: el objeto se sale de la imagen")
+
 
 # pegarAvionEnMontania()
 pegarOsoNiñosPlaya()
