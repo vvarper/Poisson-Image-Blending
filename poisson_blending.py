@@ -10,8 +10,8 @@ import numpy as np
 import cv2
 from scipy import sparse
 from scipy.sparse import linalg
-from os import listdir
-from os.path import isfile, join
+
+##################### FUNCIONES AUXILIARES CARGA/SHOW ##########################
 
 # Función para cargar una imagen con valores de tipo float
 
@@ -81,7 +81,7 @@ def mostrarImagen(im, dibujar=True, titulo=None, norm=False):
 
 
 def mostrarVariasImagenes(vim, titulos=[], reparto=(0, 0), dimensiones=(9, 9),
-                          norm=True):
+                          norm=False):
 
     num_imagenes = len(vim)
 
@@ -113,7 +113,7 @@ def getObjeto(nombre_mascara):
     _, mascara = cv2.threshold(mascara, 0, 255, cv2.THRESH_OTSU)
 
     posiciones_objeto = getPosicionesMascara(mascara)
-    return posiciones_objeto
+    return posiciones_objeto, mascara
 
 # Devuelve una lista con los píxeles (índices) dentro de la máscara
 
@@ -142,6 +142,9 @@ def calcularDesplazamiento(pos_dest, objeto, destino):
     if not type(pos_dest[1]) is int:
         pos_dest[1] = int(destino.shape[1]*pos_dest[1])
     pos_dest = np.array(pos_dest, dtype=np.uint32)
+
+    print(
+        f"\n  -> Posición destino: {pos_dest},    Dimensiones destino: {destino.shape[:2]}")
 
     # Obtener los extremos de la máscara y calcular su centro
     posiciones = np.array(objeto)
@@ -196,7 +199,6 @@ def matrizPoisson(omega):
 
     # Para cada píxel/posición
     for i, posicion in enumerate(omega):
-        progress_bar(i, N-1)  # OJO
         A[i, i] = 4  # 4 en la diagonal (píxel actual)
 
         # -1 en las columnas de los vecinos en omega
@@ -295,7 +297,6 @@ def calcularDivGuia(omega, fuente, destino, despl):
 
     # Para cada píxel en omega
     for i in range(N):
-        progress_bar(i, len(omega)-1)  # OJO
         # Condición contorno (común a ambos métodos)
         valorBorde = calcularValorBorde(omega, omega[i], destino, despl)
         # Diverguencia de v + valorBorde
@@ -307,28 +308,13 @@ def calcularDivGuia(omega, fuente, destino, despl):
 
 ################################################################################
 
-
-def progress_bar(n, N):
-    '''
-    print current progress
-    '''
-
-    step = 2
-    percent = float(n) / float(N) * 100
-
-    # convert percent to bar
-    current = "#" * int(percent//step)
-    remain = " " * int(100/step-int(percent//step))
-    bar = "|{}{}|".format(current, remain)
-    print("\r{}:{:3.0f}[%]".format(bar, percent), end="", flush=True)
-
-
 # Devuelve dos imágenes (copia/pega en imágenes según criterios distintos):
 #   -> Poisson Blending con Importing Gradients y con Mixing Gradients
 # objeto es una lista de índices de la imagen fuente
 # fuente y destino son imágenes color (3 canales)
 # despl es una pareja de enteros que indica el desplazamiento de cada
 # píxel del objeto en la fuente respecto a su posición final en el destino
+
 
 def poissonBlending(objeto, fuente, destino, despl):
 
@@ -340,7 +326,7 @@ def poissonBlending(objeto, fuente, destino, despl):
     print(f"Número de píxeles a modificar: {len(objeto)}")
 
     # 1. Calcular matriz de coeficientes para omega
-    print("\nCalculando A")
+    print("\nCalculando A ...")
     A = matrizPoisson(objeto)
 
     # Para cada canal
@@ -350,16 +336,16 @@ def poissonBlending(objeto, fuente, destino, despl):
 
         # 2.1 Calcular vector columna b para importing y mixing
 
-        print("Calculando b para importing gradients y para mixing gradients")
+        print("Calculando b para importing gradients y para mixing gradients ...")
         b_import, b_mix = calcularDivGuia(
             objeto, fuente[:, :, canal], destino[:, :, canal], despl)
 
         # 2.2 Resolver A*f_omega=b
 
-        print("\nCalculando f_omega para importing gradients")
+        print("\nCalculando f_omega para importing gradients ...")
         f_omega_import, _ = linalg.cg(A, b_import)
 
-        print("Calculando f_omega para mixing gradients")
+        print("Calculando f_omega para mixing gradients ...")
         f_omega_mix, _ = linalg.cg(A, b_mix)
 
         # 2.3 Incorporar f_omega a f
@@ -377,150 +363,54 @@ def poissonBlending(objeto, fuente, destino, despl):
     return np.clip(solucion_import, 0, 255), np.clip(solucion_mix, 0, 255)
 
 ################################################################################
-
+########################## FUNCIONES EJECUCIÓN #################################
 ################################################################################
 
+# Función general para pegar un objeto (imagen fuente junto a imagen máscara) en la
+# posición pos_dest de una imagen destino.
+# Las imágenes se especifican con su nombre, y se deben encontrar en la carpeta
+# correspondiente:
+# Máscara en imagenes/masks, fuente en imagenes/sources y destino en imagenes/targets
 
-def pegarAvionEnMontaña():
-    objeto = getObjeto("mask_avion.jpg")
-    fuente = cargarImagen("imagenes/sources/avion.jpg", 1)
-    destino = cargarImagen("imagenes/targets/montaña.jpg", 1)
 
-    pos_dest = [0.5, 0.5]
+def pegarUnObjeto(nomb_fuente, nomb_mascara, nomb_destino, pos_dest):
+    objeto, mascara = getObjeto(nomb_mascara)
+    fuente = cargarImagen("imagenes/sources/" + nomb_fuente, 1)
+    destino = cargarImagen("imagenes/targets/" + nomb_destino, 1)
+
+    print(f"\nPegado de {nomb_fuente} en {nomb_destino}")
+
     despl, despl_valido = calcularDesplazamiento(pos_dest, objeto, destino)
 
     if (despl_valido):
         res_paste = pegarObjeto(objeto, fuente, destino, despl)
-        mostrarImagen(res_paste)
+
+        mostrarVariasImagenes([fuente, mascara, destino, res_paste],
+                              titulos=[nomb_fuente, nomb_mascara, nomb_destino,
+                                       "Pegado Directo"])
+        input("\n--- Pulsar tecla para continuar ---\n")
 
         res_import, res_mixing = poissonBlending(
             objeto, fuente, destino, despl)
 
-        mostrarVariasImagenes([res_paste, res_import, res_mixing])
-        cv2.imwrite('salidas/avion_montaña_paste.png', res_paste)
-        cv2.imwrite('salidas/avion_montaña_import.png', res_import)
-        cv2.imwrite('salidas/avion_montaña_mixing.png', res_mixing)
+        mostrarVariasImagenes([res_import, res_mixing],
+                              titulos=["Importing Gradients", "Mixing Gradients"])
+        input("\n--- Pulsar tecla para continuar ---\n")
     else:
         print("Posición destino no válida: el objeto se sale de la imagen")
 
-def pegarGradienteMuro():
-    objeto = getObjeto("mask_grad.png")
-    fuente = cargarImagen("imagenes/sources/grad.png", 1)
-    destino = cargarImagen("imagenes/targets/muro.png", 1)
-
-    pos_dest = [0.5, 0.5]
-    despl, despl_valido = calcularDesplazamiento(pos_dest, objeto, destino)
-
-    if (despl_valido):
-        res_paste = pegarObjeto(objeto, fuente, destino, despl)
-        mostrarImagen(res_paste)
-
-        res_import, res_mixing = poissonBlending(
-            objeto, fuente, destino, despl)
-
-        mostrarVariasImagenes([res_paste, res_import, res_mixing])
-        cv2.imwrite('salidas/grado_muro_paste.png', res_paste)
-        cv2.imwrite('salidas/grado_muro_import.png', res_import)
-        cv2.imwrite('salidas/grado_muro_mixing.png', res_mixing)
-    else:
-        print("Posición destino no válida: el objeto se sale de la imagen")
-
-def pegarGrafitiPared():
-    objeto = getObjeto("mask_grafiti.jpg")
-    fuente = cargarImagen("imagenes/sources/grafiti.jpg", 1)
-    destino = cargarImagen("imagenes/targets/pared.jpg", 1)
-
-    pos_dest = [0.3, 0.5]
-    despl, despl_valido = calcularDesplazamiento(pos_dest, objeto, destino)
-
-    if (despl_valido):
-        res_paste = pegarObjeto(objeto, fuente, destino, despl)
-        mostrarImagen(res_paste)
-
-        res_import, res_mixing = poissonBlending(
-            objeto, fuente, destino, despl)
-
-        mostrarVariasImagenes([res_paste, res_import, res_mixing])
-        cv2.imwrite('salidas/grafiti_pared_paste.png', res_paste)
-        cv2.imwrite('salidas/grafiti_pared_import.png', res_import)
-        cv2.imwrite('salidas/grafiti_pared_mixing.png', res_mixing)
-    else:
-        print("Posición destino no válida: el objeto se sale de la imagen")
-
-def pegarPinguinoParque():
-    objeto = getObjeto("mask_pinguino.jpg")
-    fuente = cargarImagen("imagenes/sources/pinguino.jpg", 1)
-    destino = cargarImagen("imagenes/targets/parque.jpg", 1)
-
-    pos_dest = [0.8, 0.15]
-    despl, despl_valido = calcularDesplazamiento(pos_dest, objeto, destino)
-
-    if (despl_valido):
-        res_paste = pegarObjeto(objeto, fuente, destino, despl)
-        mostrarImagen(res_paste)
-
-        res_import, res_mixing = poissonBlending(
-            objeto, fuente, destino, despl)
-
-        mostrarVariasImagenes([res_paste, res_import, res_mixing])
-        cv2.imwrite('salidas/parque_pinguino_paste.png', res_paste)
-        cv2.imwrite('salidas/parque_pinguino_import.png', res_import)
-        cv2.imwrite('salidas/parque_pinguino_mixing.png', res_mixing)
-    else:
-        print("Posición destino no válida: el objeto se sale de la imagen")
-
-def pegarPinguinoPlaya():
-    objeto = getObjeto("mask_pinguino.jpg")
-    fuente = cargarImagen("imagenes/sources/pinguino.jpg", 1)
-    destino = cargarImagen("imagenes/targets/playa_atardecer.jpg", 1)
-
-    pos_dest = [0.8, 0.7]
-    despl, despl_valido = calcularDesplazamiento(pos_dest, objeto, destino)
-
-    if (despl_valido):
-        res_paste = pegarObjeto(objeto, fuente, destino, despl)
-        mostrarImagen(res_paste)
-
-        res_import, res_mixing = poissonBlending(
-            objeto, fuente, destino, despl)
-
-        mostrarVariasImagenes([res_paste, res_import, res_mixing])
-        cv2.imwrite('salidas/playa_pinguino_paste.png', res_paste)
-        cv2.imwrite('salidas/playa_pinguino_import.png', res_import)
-        cv2.imwrite('salidas/playa_pinguino_mixing.png', res_mixing)
-    else:
-        print("Posición destino no válida: el objeto se sale de la imagen")
-
-def pegarTazaCocina():
-    objeto = getObjeto("mask_taza.jpg")
-    fuente = cargarImagen("imagenes/sources/taza.jpg", 1)
-    destino = cargarImagen("imagenes/targets/cocina.jpg", 1)
-
-    pos_dest = [282, 256]
-    despl, despl_valido = calcularDesplazamiento(pos_dest, objeto, destino)
-
-    if (despl_valido):
-        res_paste = pegarObjeto(objeto, fuente, destino, despl)
-        mostrarImagen(res_paste)
-
-        res_import, res_mixing = poissonBlending(
-            objeto, fuente, destino, despl)
-
-        mostrarVariasImagenes([res_paste, res_import, res_mixing])
-        cv2.imwrite('salidas/taza_cocina_paste.png', res_paste)
-        cv2.imwrite('salidas/taza_cocina_import.png', res_import)
-        cv2.imwrite('salidas/taza_cocina_mixing.png', res_mixing)
-    else:
-        print("Posición destino no válida: el objeto se sale de la imagen") 
+# Función para pegar un oso y dos niños (en máscaras diferentes) en el agua
 
 
 def pegarOsoNiñosPlaya():
-    mask_niño = getObjeto("mask_niño.jpg")
-    mask_oso = getObjeto("mask_oso.jpg")
-    mask_niña = getObjeto("mask_niña.jpg")
+    mask_niño, img_mask_niño = getObjeto("mask_niño.jpg")
+    mask_oso, img_mask_oso = getObjeto("mask_oso.jpg")
+    mask_niña, img_mask_niña = getObjeto("mask_niña.jpg")
     niños = cargarImagen("imagenes/sources/niños.png", 1)
     oso = cargarImagen("imagenes/sources/oso.jpg", 1)
     destino = cargarImagen("imagenes/targets/perez_water.jpg", 1)
+
+    print(f"\nPegado de niños.png y oso.jpg en perez_water.jpg")
 
     pos_dest_oso = [0.25, 0.5]
     despl_oso, despl_valido1 = calcularDesplazamiento(
@@ -538,8 +428,18 @@ def pegarOsoNiñosPlaya():
         res_paste = pegarObjeto(mask_oso, oso, destino, despl_oso)
         res_paste = pegarObjeto(mask_niño, niños, res_paste, despl_niño)
         res_paste = pegarObjeto(mask_niña, niños, res_paste, despl_niña)
-        mostrarImagen(res_paste)
 
+        mostrarVariasImagenes([oso, niños, destino, img_mask_oso, img_mask_niña, img_mask_niño],
+                              titulos=["oso.jpg", "niños.png", "perez_water.jpg",
+                                       "mask_oso.jpg", "mask_niña.jpg", "mask_niño.jpg"])
+        input("\n--- Pulsar tecla para continuar ---\n")
+        mostrarImagen(res_paste, "Pegado Directo")
+        input("\n--- Pulsar tecla para continuar ---\n")
+
+        print("Se procede pegar el oso y cada niño en el agua")
+        print(
+            "Se obtendrá finalmente una imagen Importing Gradients, y otra Mixing Gradients")
+        print("Dado que se pegan 3 objetos diferentes (con dos método): SE REALIZARÁN 5 POISSON BLENDING SEGUIDOS")
         res1_import, res1_mixing = poissonBlending(
             mask_oso, oso, destino, despl_oso)
         res2_import, _ = poissonBlending(
@@ -552,40 +452,61 @@ def pegarOsoNiñosPlaya():
             mask_niña, niños, res2_import, despl_niña)
 
         mostrarVariasImagenes(
-            [res_paste, res3_import, res3_mixing], norm=False)
-        cv2.imwrite('salidas/oso_niños_paste.png', res_paste)
-        cv2.imwrite('salidas/oso_niños_import.png', res3_import)
-        cv2.imwrite('salidas/oso_niños_mixing.png', res3_mixing)
+            [res3_import, res3_mixing], titulos=["Importing Gradients", "Mixing Gradients"])
+        input("\n--- Pulsar tecla para continuar ---\n")
+
     else:
         print("Posición destino no válida: el objeto se sale de la imagen")
 
+# Función para pegar una luna y su reflejo (en máscaras diferentes) en la playa
+
+
 def pegarLunaPlaya():
-    mask_luna = getObjeto("mask_luna.jpg")
-    mask_brillo = getObjeto("mask_luna_brillo2.jpg")
+    mask_luna, img_mask_luna = getObjeto("mask_luna.jpg")
+    mask_brillo, img_mask_brillo = getObjeto("mask_luna_brillo2.jpg")
     source = cargarImagen("imagenes/sources/luna.jpg", 1)
     destino = cargarImagen("imagenes/targets/playa2.jpg", 1)
 
-    pos_luna = [0.15,0.3]
-    despl_luna, despl_valido1 = calcularDesplazamiento(pos_luna, mask_luna, destino)
+    print(f"\nPegado de luna.png en playa2.jpg")
+
+    pos_luna = [0.15, 0.3]
+    despl_luna, despl_valido1 = calcularDesplazamiento(
+        pos_luna, mask_luna, destino)
 
     pos_brillo = [0.42, 0.33]
-    despl_brillo, despl_valido2 = calcularDesplazamiento(pos_brillo, mask_brillo, destino)
+    despl_brillo, despl_valido2 = calcularDesplazamiento(
+        pos_brillo, mask_brillo, destino)
 
     if despl_valido1 and despl_valido2:
         res_paste = pegarObjeto(mask_luna, source, destino, despl_luna)
         res_paste = pegarObjeto(mask_brillo, source, res_paste, despl_brillo)
-        mostrarImagen(res_paste)
 
-        res1_import, res1_mixing = poissonBlending(mask_brillo, source, destino, despl_brillo)
-        res2_import, _ = poissonBlending(mask_luna, source, res1_import, despl_luna)
-        _, res2_mixing = poissonBlending(mask_luna, source, res1_mixing, despl_luna)
+        mostrarVariasImagenes([source, img_mask_luna, img_mask_brillo, destino],
+                              titulos=["luna.jpg", "mask_luna.jpg", "mask_luna_brillo2.png",
+                                       "playa2.jpg"])
+        input("\n--- Pulsar tecla para continuar ---\n")
+        mostrarImagen(res_paste, "Pegado Directo")
+        input("\n--- Pulsar tecla para continuar ---\n")
 
-        mostrarVariasImagenes([res_paste, res2_import, res2_mixing], norm=False)
-        cv2.imwrite('salidas/playa_luna_paste.jpg', res_paste)
-        cv2.imwrite('salidas/playa_luna_import.jpg', res2_import)
-        cv2.imwrite('salidas/playa_luna_mixing.jpg', res2_mixing)
+        print("Se procede pegar la luna y su reflejo en el agua")
+        print(
+            "Se obtendrá finalmente una imagen Importing Gradients, y otra Mixing Gradients")
+        print("Dado que se pegan 2 objetos diferentes (con dos método): SE REALIZARÁN 4 POISSON BLENDING SEGUIDOS")
+        res1_import, res1_mixing = poissonBlending(
+            mask_brillo, source, destino, despl_brillo)
+        res2_import, _ = poissonBlending(
+            mask_luna, source, res1_import, despl_luna)
+        _, res2_mixing = poissonBlending(
+            mask_luna, source, res1_mixing, despl_luna)
+
+        mostrarVariasImagenes(
+            [res2_import, res2_mixing], titulos=["Importing Gradients", "Mixing Gradients"])
+        input("\n--- Pulsar tecla para continuar ---\n")
     else:
         print("Posición destino no válida: el objeto se sale de la imagen")
+
+# OJO
+
 
 def pegarMeteoritoCiudad():
     mask_meteorito = getObjeto("mask_meteorito.jpg")
@@ -593,14 +514,16 @@ def pegarMeteoritoCiudad():
     destino = cargarImagen("imagenes/targets/ciudad.jpg", 1)
 
     pos_meteorito = [0.15, 0.2]
-    despl_met, despl_valido = calcularDesplazamiento(pos_meteorito, mask_meteorito, destino)
+    despl_met, despl_valido = calcularDesplazamiento(
+        pos_meteorito, mask_meteorito, destino)
 
     if despl_valido:
         res_paste = pegarObjeto(mask_meteorito, meteorito, destino, despl_met)
         mostrarImagen(res_paste)
 
-        res_import, res_mixing = poissonBlending(mask_meteorito, meteorito, destino, despl_met)
-        
+        res_import, res_mixing = poissonBlending(
+            mask_meteorito, meteorito, destino, despl_met)
+
         mostrarVariasImagenes([res_paste, res_import, res_mixing], norm=False)
         cv2.imwrite('salidas/meteorito_ciudad_paste.jpg', res_paste)
         cv2.imwrite('salidas/meteorito_ciudad_import.jpg', res_import)
@@ -608,13 +531,37 @@ def pegarMeteoritoCiudad():
     else:
         print("Posición destino no válida: el objeto se sale de la imagen")
 
+############################## EJECUCIÓN #######################################
 
-# pegarGrafitiPared()
-# pegarGradienteMuro()
-# pegarAvionEnMontaña()
+# # Pegar Avión en Montaña
+# pegarUnObjeto("avion.jpg", "mask_avion.jpg", "montaña.jpg", [0.5,0.5])
+
+# # Pegar Gradiente en Muro
+# pegarUnObjeto("grad.png", "mask_grad.png", "muro.png", [0.5,0.5])
+
+# # Pegar Grafiti en Pared
+# pegarUnObjeto("grafiti.jpg", "mask_grafiti.jpg", "pared.jpg", [0.3,0.5])
+
+# # Pegar Pingüino en Parque
+# pegarUnObjeto("pinguino.jpg", "mask_pinguino.jpg", "parque.jpg", [0.8, 0.15])
+
+# # Pegar Pingüino2 en Parque
+# pegarUnObjeto("pinguino2.jpg", "mask_pinguino2.jpg", "parque.jpg", [0.77, 0.15])
+
+# # Pegar Pingüino en Playa
+# pegarUnObjeto("pinguino.jpg", "mask_pinguino.jpg", "playa_atardecer.jpg", [0.8, 0.7])
+
+# # Pegar Pingüino2 en Playa
+# pegarUnObjeto("pinguino2.jpg", "mask_pinguino2.jpg", "playa_atardecer.jpg", [0.8, 0.7])
+
+# # Pegar Taza en Cocina
+# pegarUnObjeto("taza.jpg", "mask_taza.jpg", "cocina.jpg", [282, 256])
+
+# # Pegar Meteorito en Ciudad
+# pegarUnObjeto("meteorito.jpg", "mask_meteorito.jpg", "ciudad.jpg", [0.15, 0.2])
+
+# # Pegar oso y niños en el agua
 # pegarOsoNiñosPlaya()
+
+# # Pegar luna y su reflejo en playa
 # pegarLunaPlaya()
-# pegarPinguinoParque()
-# pegarTazaCocina()
-# pegarPinguinoPlaya()
-pegarMeteoritoCiudad()
