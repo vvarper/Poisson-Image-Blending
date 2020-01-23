@@ -344,7 +344,7 @@ Un detalle a señalar a la hora de mostrar los resultados del pegado de imágene
 
 # Ejecución y Resultados 
 
-Con el fin de comprobar el funcionamiento de esta técnica, es el momento de utilizarla con diferentes imágenes ejemplo. Para ello, hemos buscado diferentes imágenes (unas como fuente y otras como destino), y hemos creado las máscara de las imágenes fuente. El objetivo es aplicar la técnica de Poisson Blending (con Importin Gradients y Mixing Gradients) y el solapado directo, para poder ver una comparativa. La posición concreta en la que se va pegar cada objeto la hemos obtenido experimentalmente, tratando de colocarlos en lugares que tengan sentido (como una taza de café encima de una mesa). 
+Con el fin de comprobar el funcionamiento de esta técnica, es el momento de utilizarla con diferentes imágenes ejemplo. Para ello, hemos buscado diferentes imágenes (unas como fuente y otras como destino), y hemos creado las máscara de las imágenes fuente. El objetivo es aplicar la técnica de Poisson Blending (con Importing Gradients y Mixing Gradients) y el solapado directo, para poder ver una comparativa. La posición concreta en la que se va pegar cada objeto la hemos obtenido experimentalmente, tratando de colocarlos en lugares que tengan sentido (como una taza de café encima de una mesa). 
 
 En primer lugar veamos un ejemplo que está también presente en el paper: un avión como imagen fuente y un paisaje en una montaña como destino. 
 
@@ -388,7 +388,7 @@ En primer lugar veamos un ejemplo que está también presente en el paper: un av
 \end{figure}
 
 Como se puede ver, pese a que la máscara no delimita al avión de forma precisa (hay cierto borde alrededor), 
-la técnica Poisson Blending logra realizar un pegado de calidad. Si nos fijamos bien en el resultado con Importint Gradients, se puede ver un poco de ese borde (bruma blanca), mientras que en el método Mixing Gradients ha sido completamente removido este borde. Por contra, en la parte trasera inferior del avión podemos ver que ha aparecido la textura de la montaña de fondo, algo que no ocurre en Importing Gradients, pues en su interior solo se computan los gradientes del propio avión. En cualquier caso, los resultados son favorables, y de hecho coinciden con los mostrados en el paper de referencia, lo que es buen indicativo de que la implementación es correcta. 
+la técnica Poisson Blending logra realizar un pegado de calidad. Si nos fijamos bien en el resultado con Importing Gradients, se puede ver un poco de ese borde (bruma blanca), mientras que en el método Mixing Gradients ha sido completamente removido este borde. Por contra, en la parte trasera inferior del avión podemos ver que ha aparecido la textura de la montaña de fondo, algo que no ocurre en Importing Gradients, pues en su interior solo se computan los gradientes del propio avión. En cualquier caso, los resultados son favorables, y de hecho coinciden con los mostrados en el paper de referencia, lo que es buen indicativo de que la implementación es correcta. 
 
 Veamos ahora un caso más difícil que también esta en el paper citado: 
 
@@ -470,6 +470,63 @@ A continuación mostramos un ejemplo similar, esta vez pegando un grafiti en una
 
 Tal y como pasaba en el ejemplo anterior, el método Mixing Gradients logra una solución claramente mejor.
 
-A continuación volvemos a usar un ejemplo que estaba presente en el paper, en el que se pega un oso y unos niños 
+A continuación volvemos a usar un ejemplo que estaba presente en el paper, en el que se pega un oso y unos niños en el agua. En esta ocasión, se tienen dos imágenes fuente diferentes, y además para una de ellas se tienen dos máscara (una para cada niño). 
+
+\begin{figure}[H]
+	\begin{subfigure}[b]{0.49\textwidth}
+		\includegraphics[width=0.8\textwidth]{img/sources/oso.jpg}
+		\caption{Imagen fuente Oso}
+		\label{fig:grado}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.49\textwidth}
+		\includegraphics[width=0.8\textwidth]{img/sources/ninios.png}
+		\caption{Imagen fuente Niños}
+		\label{fig:intermediacion}
+	\end{subfigure}
+	\begin{subfigure}[b]{0.49\textwidth}
+		\includegraphics[width=0.8\textwidth]{img/masks/mask_ninia.jpg}
+		\caption{Máscara niña}
+		\label{fig:grado}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.49\textwidth}
+		\includegraphics[width=0.8\textwidth]{img/masks/mask_ninio.jpg}
+		\caption{Máscara niño}
+		\label{fig:intermediacion}
+	\end{subfigure}
+    \begin{subfigure}[b]{0.49\textwidth}
+		\includegraphics[width=0.8\textwidth, height=3.5cm]{img/masks/mask_oso.jpg}
+		\caption{Máscara oso}
+		\label{fig:grado}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.49\textwidth}
+		\includegraphics[width=0.6\textwidth]{img/targets/perez_water.jpg}
+		\caption{Destino}
+		\label{fig:intermediacion}
+    \end{subfigure}
+    \begin{subfigure}[b]{0.49\textwidth}
+		\includegraphics[width=0.6\textwidth]{img/salidas/oso_ninios_paste.png}
+		\caption{Pegado Directo}
+		\label{fig:intermediacion}
+	\end{subfigure}
+\end{figure}
+
+\begin{figure}[H]
+	\begin{subfigure}[b]{0.49\textwidth}
+		\includegraphics[width=0.8\textwidth]{img/salidas/oso_ninios_import.png}
+		\caption{Poisson Blending Importing Gradients}
+		\label{fig:grado}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.49\textwidth}
+		\includegraphics[width=0.8\textwidth]{img/salidas/oso_ninios_mixing.png}
+		\caption{Poisson Blending Mixing Gradients}
+		\label{fig:intermediacion}
+	\end{subfigure}
+\end{figure}
+
+Una vez más, el resultado concuerda con el mostrado en el paper. En esta ocasión, Importing y Mixing
 
 # Referencias

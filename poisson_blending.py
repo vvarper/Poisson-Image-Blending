@@ -509,67 +509,37 @@ def pegarLunaPlaya():
     else:
         print("Posición destino no válida: el objeto se sale de la imagen")
 
-# OJO
-
-
-def pegarMeteoritoCiudad():
-    objeto, mask_meteorito = getObjeto("mask_reja2.jpg")
-    meteorito = cargarImagen("imagenes/sources/reja2.jpg", 1)
-    destino = cargarImagen("imagenes/targets/arco_triunfo3.jpg", 1)
-
-    pos_meteorito = [0.535,0.5]
-    despl_met, despl_valido = calcularDesplazamiento(
-        pos_meteorito, objeto, destino)
-
-    if despl_valido:
-        res_paste = pegarObjeto(objeto, meteorito, destino, despl_met)
-        mostrarImagen(res_paste)
-
-        res_import, res_mixing = poissonBlending(
-            objeto, meteorito, destino, despl_met)
-
-        mostrarVariasImagenes([res_paste, res_import, res_mixing], norm=False)
-        cv2.imwrite('salidas/meteorito_ciudad_paste.jpg', res_paste)
-        cv2.imwrite('salidas/meteorito_ciudad_import.jpg', res_import)
-        cv2.imwrite('salidas/meteorito_ciudad_mixing.jpg', res_mixing)
-    else:
-        print("Posición destino no válida: el objeto se sale de la imagen")
-
 ############################## EJECUCIÓN #######################################
 
-# # Pegar Avión en Montaña
-# pegarUnObjeto("avion.jpg", "mask_avion.jpg", "montaña.jpg", [0.5,0.5])
+# 1 Pegar Avión en Montaña
+pegarUnObjeto("avion.jpg", "mask_avion.jpg", "montaña.jpg", [0.5,0.5])
 
-# # Pegar Gradiente en Muro
-# pegarUnObjeto("grad.png", "mask_grad.png", "muro.png", [0.5,0.5])
+# 2 Pegar Gradiente en Muro
+pegarUnObjeto("grad.png", "mask_grad.png", "muro.png", [0.5,0.5])
 
-# # Pegar Grafiti en Pared
-# pegarUnObjeto("grafiti.jpg", "mask_grafiti.jpg", "pared.jpg", [0.3,0.5])
+# 3 Pegar Grafiti en Pared
+pegarUnObjeto("grafiti.jpg", "mask_grafiti.jpg", "pared.jpg", [0.3,0.5])
 
-# # Pegar Pingüino en Parque
-# pegarUnObjeto("pinguino.jpg", "mask_pinguino.jpg", "parque.jpg", [0.8, 0.15])
+# 4 Pegar Pingüino en Parque
+pegarUnObjeto("pinguino.jpg", "mask_pinguino.jpg", "parque.jpg", [0.8, 0.15])
 
-# # Pegar Pingüino2 en Parque
-# pegarUnObjeto("pinguino2.jpg", "mask_pinguino2.jpg", "parque.jpg", [0.77, 0.15])
+# 5 Pegar Pingüino2 en Playa
+pegarUnObjeto("pinguino2.jpg", "mask_pinguino2.jpg", "playa_atardecer.jpg", [0.8, 0.7])
 
-# # Pegar Pingüino en Playa
-# pegarUnObjeto("pinguino.jpg", "mask_pinguino.jpg", "playa_atardecer.jpg", [0.8, 0.7])
+# 6 Pegar Taza en Cocina
+pegarUnObjeto("taza.jpg", "mask_taza.jpg", "cocina.jpg", [282, 256])
 
-# # Pegar Pingüino2 en Playa
-# pegarUnObjeto("pinguino2.jpg", "mask_pinguino2.jpg", "playa_atardecer.jpg", [0.8, 0.7])
+# 7 Pegar Meteorito en Ciudad
+pegarUnObjeto("meteorito.jpg", "mask_meteorito.jpg", "ciudad.jpg", [0.15, 0.2])
 
-# # Pegar Taza en Cocina
-# pegarUnObjeto("taza.jpg", "mask_taza.jpg", "cocina.jpg", [282, 256])
+# 8 Pegar oso y niños en el agua
+pegarOsoNiñosPlaya()
 
-# # Pegar Meteorito en Ciudad
-# pegarUnObjeto("meteorito.jpg", "mask_meteorito.jpg", "ciudad.jpg", [0.15, 0.2])
+# 9 Pegar luna y su reflejo en playa
+pegarLunaPlaya()
 
-# # Pegar oso y niños en el agua
-# pegarOsoNiñosPlaya()
+# 10 Pegar Astronauta en Oceano
+pegarUnObjeto("astronauta.jpg", "mask_astronauta.jpg", "oceano.jpg", [0.5,0.5])
 
-# # Pegar luna y su reflejo en playa
-# pegarLunaPlaya()
-
-#pegarUnObjeto("astronauta.jpg", "mask_astronauta.jpg", "oceano.jpg", [0.5,0.5])
-
+# 11 Pegar Reja en Arco del Triunfo
 pegarUnObjeto("reja.jpg", "mask_reja.jpg", "arco_triunfo.jpg")
