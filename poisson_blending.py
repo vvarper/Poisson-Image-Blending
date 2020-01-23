@@ -115,6 +115,17 @@ def getObjeto(nombre_mascara):
     posiciones_objeto = getPosicionesMascara(mascara)
     return posiciones_objeto
 
+# Devuelve una lista con los píxeles (índices) dentro de la máscara
+
+
+def getPosicionesMascara(mascara):
+    pos_y, pos_x = np.nonzero(mascara)
+
+    posiciones = []
+    for i in range(len(pos_y)):
+        posiciones.append((pos_y[i], pos_x[i]))
+    return posiciones
+
 # Función para calcular el desplazamiento necesario en una máscara para que
 # el centro de esta quede en una posición concreta de la imagen destino
 # Se devuelve también un booleano que indica si con ese desplazamiento el objeto
@@ -163,17 +174,6 @@ def pegarObjeto(omega, fuente, destino, despl):
         solucion[pos_dest] = fuente[posicion]
 
     return solucion
-
-# Devuelve omega: los píxeles (índices) dentro de la máscara
-
-
-def getPosicionesMascara(mascara):
-    pos_y, pos_x = np.nonzero(mascara)
-
-    posiciones = []
-    for i in range(len(pos_y)):
-        posiciones.append((pos_y[i], pos_x[i]))
-    return posiciones
 
 # Devuelve las posiciones adyacentes (vecinos) de una dada
 

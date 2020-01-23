@@ -235,14 +235,17 @@ def getLaplaciana(fuente, posicion):
     return laplaciana
 ~~~
 
-En el caso de Mixing Gradients, se consideran también los gradientes en la imagen destino, comparando ambos y eligiendo en cada caso el de mayor intensidad (valor absoluto). Casos especiales a tener en cuenta se dan cuando el vecino de un elemento de omega se sale de la imagen fuente o destino. En esos casos, como usamos política de bordes de copia, el gradiente correspondiente es 0 (la resta es entre valores iguales), por lo que se utiliza directamente el gradiente en la otra imagen (si esta sí que contiene al vecino). La implementación es la siguiente:
+En el caso de Mixing Gradients, se consideran también los gradientes en la imagen destino, comparando ambos y eligiendo en cada caso el de mayor intensidad (valor absoluto). Casos especiales a tener en cuenta se dan cuando el vecino de un elemento de omega se sale de la imagen fuente o destino. En esos casos, como usamos política de bordes de copia, el gradiente correspondiente es 0 (la resta es entre valores iguales), por lo que se utiliza directamente el gradiente en la otra imagen (si esta sí que contiene al vecino). La implementación se encuentra en la siguiente página.
+
+\pagebreak 
 
 ~~~Python 
 def getLaplacianaMix(fuente, destino, posicion, despl):
     laplaciana = 0
     for vecino in getVecindario(posicion):
         # Caso general: calcular y comparar gradientes en las dos imágenes
-        if dentroImagen(destino, vecino+despl) and dentroImagen(fuente, vecino):
+        if dentroImagen(destino, vecino+despl) and 
+                dentroImagen(fuente, vecino):
             grad_fuente = fuente[posicion] - fuente[vecino]
             grad_destino = destino[tuple(
                 posicion+despl)] - destino[tuple(vecino+despl)]
@@ -251,8 +254,8 @@ def getLaplacianaMix(fuente, destino, posicion, despl):
             else:
                 laplaciana += grad_destino
         # Si una de las imágenes no contiene al correspondiente vecino:
-        # -> política de bordes de copia: gradiente intensidad 0. Se usa directamente 
-        # el gradiente de la otra
+        # -> política de bordes de copia: gradiente intensidad 0. 
+        #   -> Se usa directamente el gradiente de la otra
         elif dentroImagen(destino, vecino+despl):
             grad_destino = destino[tuple(
                 posicion+despl)] - destino[tuple(vecino+despl)]
@@ -263,6 +266,76 @@ def getLaplacianaMix(fuente, destino, posicion, despl):
 
     return laplaciana
 ~~~
+
+## Obtención de las Posiciones del Objeto y pegar y el Desplazamiento 
+
+Hasta ahora, se ha descrito el proceso por el que, a partir de una imagen fuente, 
+posiciones de un objeto en la fuente, una imagen destino y un desplazamiento, se 
+obtiene una imagen final con el objeto pegado en el destino mediante Poisson Blending. 
+
+Sin embargo, es preciso detallar el procesamiento previo a esta función, necesario 
+para obtener las posiciones del objeto y el desplazamiento en el destino.
+
+### Posiciones del Objeto 
+
+Para obtener estas posiciones, se requiere el uso de una imagen en blanco y negro (máscara)
+con las mismas dimensiones que la imagen fuente, de forma que el color blanco representa 
+al objeto seleccionado. Estas máscaras deben crearse de forma externa, y en nuestro caso 
+las hemos creado con el programa de edición de imágenes GIMP, que es un software libre. 
+
+Por lo tanto, una vez se dispone de dicha imagen máscara, se puede pasar su ruta como 
+parámetro a la función **getObjeto(nombre_mascara)**, que devuelve una lista con las 
+posiciones correspondientes al objeto. Para ello, se carga la imagen en blanco y negro con valores enteros, y,
+para asegurar que no hay outliers en la representación, se utiliza la función de openCV cv2.threshold(mascara, 0, 255, cv2.THRESH_OTSU), que con estos parámetros cambia a 255 el valor de los píxeles próximos a 255, y a 0 el resto. Es decir, binariza la máscara. 
+
+Hecho esto, se utiliza la función getPosicionesObjeto(mascara) para crear la lista de posiciones, recorriendo la máscara y añadiendo las posiciones de los píxeles con valor no cero (blanco).
+
+### Desplazamiento en el Destino 
+
+La posición del objeto en la imagen fuente es independiente de la que va a tener en el destino. Por lo tanto, debe indicarse cuál es el lugar del destino en el ha de pegarse en el objeto. Para ello, se declara una lista con la posición central en la que debe ubicarse el objeto, que puede ser bien en forma de coordenadas concretas en el destino, o, si se utilizan valores reales, la posición relativa respecto a las dimensiones (un porcentaje). Por ejemplo, si tenemos una imagen de 200x200, el punto central 100x100 se podría indicar como [100, 100] o como [0.5, 0.5], e incluso podría indicarse cada eje de forma distinta (uno de forma absoluta y el otro de forma relativa).
+
+Definidas las coordenadas destino, se hace uso de una función **calcularDesplazamiento(pos_dest, objeto, destino)** que obtiene el desplazamiento a aplicar a los píxeles del objeto (en la imagen fuente) para obtener las posiciones correspondientes en la imagen destino, de forma que el centro del objeto se ubique finalmente en el la posición dada por pos_dest. 
+
+Cabe destacar que, con el fin de evitar desplazamientos no deseados (objeto queda parcial o totalmente fuera de la imagen) esta función también devuelve un valor booleano que indica si el desplazamiento resultante de la posición dada es válido. Para ello, se comprueba que al aplicar dicho desplazamiento al objeto, este queda completamente contenido en la imagen destino, comprobando para ello el resultado de aplicar el desplazamiento a los extremos del objeto (max_x, min_x, max_y, min_y). 
+
+\pagebreak 
+
+~~~Python
+def calcularDesplazamiento(pos_dest, objeto, destino):
+
+    # Si se pasan reales en pos_dest, se interpreta como un porcentaje
+    # respecto al tamaño de la imagen destino. En caso contrario, 
+    # son coordenadas directas.
+    if not type(pos_dest[0]) is int:
+        pos_dest[0] = int(destino.shape[0]*pos_dest[0])
+    if not type(pos_dest[1]) is int:
+        pos_dest[1] = int(destino.shape[1]*pos_dest[1])
+    pos_dest = np.array(pos_dest, dtype=np.uint32)
+
+    # Obtener los extremos de la máscara y calcular su centro
+    posiciones = np.array(objeto)
+    max_x = np.max(posiciones[:, 1])
+    min_x = np.min(posiciones[:, 1])
+    max_y = np.max(posiciones[:, 0])
+    min_y = np.min(posiciones[:, 0])
+
+    x_centro = int((max_x + min_x) / 2)
+    y_centro = int((max_y + min_y) / 2)
+
+    # Obtener el desplazamiento como la diferencia del objetivo con el 
+    # centro de la máscara
+    despl = pos_dest - (y_centro, x_centro)
+
+    # Comprobar si es un desplazamiento válido
+    despl_valido = False
+    if dentroImagen(destino, [max_y, max_x] + despl) and 
+            dentroImagen(destino, [min_y, min_x] + despl):
+        despl_valido = True
+
+    return despl, despl_valido
+~~~
+
+Tal y como se puede observar, tras interpretar la posición destino dada apropiadamente, en esta función se calcula el centro de la máscara obteniendo la media de sus extremos (max_y-min_y/2, max_x+min_x/2). Posteriormente, se calcula el desplazamiento como la diferencia entre la posición destino y este centro, y se comprueba si es válida.
 
 # Resultados 
 
