@@ -493,7 +493,38 @@ def pegarOsoNiñosPlaya():
     else:
         print("Posición destino no válida: el objeto se sale de la imagen")
 
+def pegarLunaPlaya():
+    mask_luna = getObjeto("mask_luna.jpg")
+    mask_brillo = getObjeto("mask_luna_brillo.jpg")
+    source = cargarImagen("imagenes/sources/luna.jpg", 1)
+    destino = cargarImagen("imagenes/targets/playa.jpg", 1)
+
+    pos_luna = [0.15,0.75]
+    despl_luna, despl_valido1 = calcularDesplazamiento(pos_luna, mask_luna, destino)
+
+    pos_brillo = [0.75, 0.75]
+    despl_brillo, despl_valido2 = calcularDesplazamiento(pos_brillo, mask_brillo, destino)
+
+    if despl_valido1 and despl_valido2:
+        res_paste = pegarObjeto(mask_luna, source, destino, despl_luna)
+        res_paste = pegarObjeto(mask_brillo, source, res_paste, despl_brillo)
+        mostrarImagen(res_paste)
+
+        res1_import, res1_mixing = poissonBlending(mask_brillo, source, destino, despl_brillo)
+        res2_import, _ = poissonBlending(mask_luna, source, res1_import, despl_luna)
+        _, res2_mixing = poissonBlending(mask_luna, source, res1_mixing, despl_luna)
+
+        mostrarVariasImagenes([res_paste, res2_import, res2_mixing], norm=False)
+        cv2.imwrite('salidas/playa_luna_paste.jpg', res_paste)
+        cv2.imwrite('salidas/playa_luna_import.jpg', res2_import)
+        cv2.imwrite('salidas/playa_luna_mixing.jpg', res2_mixing)
+    else:
+        print("Posición destino no válida: el objeto se sale de la imagen")
+
+
+
 # pegarGrafitiPared()
-pegarGradienteMuro()
+# pegarGradienteMuro()
 # pegarAvionEnMontaña()
 # pegarOsoNiñosPlaya()
+pegarLunaPlaya()
