@@ -587,6 +587,26 @@ def pegarLunaPlaya():
     else:
         print("Posición destino no válida: el objeto se sale de la imagen")
 
+def pegarMeteoritoCiudad():
+    mask_meteorito = getObjeto("mask_meteorito.jpg")
+    meteorito = cargarImagen("imagenes/sources/meteorito.jpg", 1)
+    destino = cargarImagen("imagenes/targets/ciudad.jpg", 1)
+
+    pos_meteorito = [0.15, 0.2]
+    despl_met, despl_valido = calcularDesplazamiento(pos_meteorito, mask_meteorito, destino)
+
+    if despl_valido:
+        res_paste = pegarObjeto(mask_meteorito, meteorito, destino, despl_met)
+        mostrarImagen(res_paste)
+
+        res_import, res_mixing = poissonBlending(mask_meteorito, meteorito, destino, despl_met)
+        
+        mostrarVariasImagenes([res_paste, res_import, res_mixing], norm=False)
+        cv2.imwrite('salidas/meteorito_ciudad_paste.jpg', res_paste)
+        cv2.imwrite('salidas/meteorito_ciudad_import.jpg', res_import)
+        cv2.imwrite('salidas/meteorito_ciudad_mixing.jpg', res_mixing)
+    else:
+        print("Posición destino no válida: el objeto se sale de la imagen")
 
 
 # pegarGrafitiPared()
@@ -596,4 +616,5 @@ def pegarLunaPlaya():
 # pegarLunaPlaya()
 # pegarPinguinoParque()
 # pegarTazaCocina()
-pegarPinguinoParque()
+# pegarPinguinoPlaya()
+pegarMeteoritoCiudad()
